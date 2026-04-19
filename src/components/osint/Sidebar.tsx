@@ -1,0 +1,57 @@
+import { Crosshair, Database, Map, FileSearch, Activity, Settings, LogOut, Shield } from "lucide-react";
+
+const NAV = [
+  { icon: Crosshair, label: "Intelijen", active: true },
+  { icon: Database, label: "Database" },
+  { icon: Map, label: "Geo-Tracking" },
+  { icon: FileSearch, label: "Investigasi" },
+  { icon: Activity, label: "Live Feed" },
+  { icon: Shield, label: "Keamanan" },
+  { icon: Settings, label: "Konfigurasi" },
+];
+
+export function Sidebar() {
+  return (
+    <aside className="w-16 lg:w-56 shrink-0 border-r border-border bg-sidebar flex flex-col">
+      <div className="p-4 border-b border-border flex items-center gap-2.5">
+        <div className="w-9 h-9 rounded-sm border border-cyber bg-cyber/10 flex items-center justify-center glow-cyber">
+          <Crosshair className="w-5 h-5 text-cyber" />
+        </div>
+        <div className="hidden lg:block">
+          <div className="text-sm font-bold tracking-wider text-foreground">JCD OSINT</div>
+          <div className="text-[10px] font-mono text-cyber tracking-widest">PROFILER //ID</div>
+        </div>
+      </div>
+
+      <nav className="flex-1 p-2 space-y-1">
+        {NAV.map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.label}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm font-medium transition-all
+                ${item.active
+                  ? "bg-cyber/15 text-cyber border-l-2 border-cyber"
+                  : "text-muted-foreground hover:bg-panel-elevated hover:text-foreground border-l-2 border-transparent"}`}
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              <span className="hidden lg:inline tracking-wide">{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="p-3 border-t border-border space-y-2">
+        <div className="hidden lg:block px-2 py-2 rounded-sm bg-panel-elevated/60 border border-border">
+          <div className="text-[10px] font-mono text-muted-foreground">OPERATOR</div>
+          <div className="text-xs font-semibold text-foreground">AGENT-007</div>
+          <div className="text-[10px] font-mono text-cyber">Clearance Lv.5</div>
+        </div>
+        <button className="w-full flex items-center gap-3 px-3 py-2 rounded-sm text-xs text-muted-foreground hover:text-destructive transition-colors">
+          <LogOut className="w-4 h-4" />
+          <span className="hidden lg:inline">Disconnect</span>
+        </button>
+      </div>
+    </aside>
+  );
+}
