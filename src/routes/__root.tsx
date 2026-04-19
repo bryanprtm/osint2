@@ -29,14 +29,18 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "leak-osint" },
+      { name: "description", content: "Command Center OSINT is a dashboard application for intelligence gathering and analysis." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "leak-osint" },
+      { property: "og:description", content: "Command Center OSINT is a dashboard application for intelligence gathering and analysis." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "leak-osint" },
+      { name: "twitter:description", content: "Command Center OSINT is a dashboard application for intelligence gathering and analysis." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/fa5f4d54-0658-4807-a7ac-47272ee653ee/id-preview-a1f1fd70--695c473a-644e-4fb9-ac01-d475a07215de.lovable.app-1776577873324.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/fa5f4d54-0658-4807-a7ac-47272ee653ee/id-preview-a1f1fd70--695c473a-644e-4fb9-ac01-d475a07215de.lovable.app-1776577873324.png" },
     ],
     links: [
       {
