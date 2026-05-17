@@ -1,12 +1,13 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { Sidebar } from "@/components/osint/Sidebar";
 import { StatusBar } from "@/components/osint/StatusBar";
 import { FeatureGrid } from "@/components/osint/FeatureGrid";
 import { QueryConsole } from "@/components/osint/QueryConsole";
 import { ResultsPanel } from "@/components/osint/ResultsPanel";
-import { FEATURES, generateMockResult, type Feature, type OsintResult } from "@/lib/osint-data";
-import { Info } from "lucide-react";
+import { generateMockResult, type Feature, type OsintResult } from "@/lib/osint-data";
+import { useAuth, storedToFeature } from "@/lib/auth";
+import { Info, LogOut, ShieldCheck, Send } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -19,11 +20,33 @@ export const Route = createFileRoute("/")({
 });
 
 function Dashboard() {
-  const [feature, setFeature] = useState<Feature>(FEATURES[0]);
+  const { ready, user, modules, settings, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const visibleFeatures: Feature[] = useMemo(
+    () => modules.filter((m) => m.enabled).map(storedToFeature),
+    [modules],
+  );
+
+  const [feature, setFeature] = useState<Feature | null>(null);
   const [result, setResult] = useState<OsintResult | null>(null);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (ready && !user) navigate({ to: "/login" });
+  }, [ready, user, navigate]);
+
+  useEffect(() => {
+    if (!feature && visibleFeatures.length > 0) setFeature(visibleFeatures[0]);
+    else if (feature && !visibleFeatures.some((f) => f.id === feature.id)) {
+      setFeature(visibleFeatures[0] ?? null);
+    }
+  }, [visibleFeatures, feature]);
+
+  if (!ready || !user) return null;
+
   const handleSubmit = (q: string) => {
+    if (!feature) return;
     setLoading(true);
     setResult(null);
     setTimeout(() => {
@@ -33,7 +56,7 @@ function Dashboard() {
   };
 
   const stats = [
-    { label: "Modul Aktif", value: FEATURES.length, accent: "text-cyber" },
+    { label: "Modul Aktif", value: visibleFeatures.length, accent: "text-cyber" },
     { label: "Query Hari Ini", value: "1,284", accent: "text-success" },
     { label: "Sumber Data", value: "12", accent: "text-cyber" },
     { label: "Uptime", value: "99.98%", accent: "text-success" },
@@ -56,9 +79,30 @@ function Dashboard() {
                 COMMAND CENTER · OPEN SOURCE INTELLIGENCE PLATFORM
               </p>
             </div>
-            <button className="flex items-center gap-2 px-3 py-1.5 rounded-sm border border-cyber/40 text-cyber text-xs font-mono tracking-wider hover:bg-cyber/10 transition-colors">
-              <Info className="w-3.5 h-3.5" /> PANDUAN OPERASIONAL
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-sm border border-border bg-panel/50 text-xs font-mono">
+                <span className="text-muted-foreground">OPERATOR:</span>
+                <span className="text-cyber tracking-wider">{user.username.toUpperCase()}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-cyber/15 text-cyber">{user.label}</span>
+                {settings.telegramEnabled && (
+                  <span title="Telegram aktif" className="text-success flex items-center gap-1"><Send className="w-3 h-3" /> TG</span>
+                )}
+              </div>
+              {user.role === "admin" && (
+                <Link to="/admin" className="flex items-center gap-2 px-3 py-1.5 rounded-sm border border-cyber/40 text-cyber text-xs font-mono tracking-wider hover:bg-cyber/10 transition-colors">
+                  <ShieldCheck className="w-3.5 h-3.5" /> ADMIN
+                </Link>
+              )}
+              <button className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-sm border border-border text-muted-foreground text-xs font-mono tracking-wider hover:border-cyber hover:text-cyber transition-colors">
+                <Info className="w-3.5 h-3.5" /> PANDUAN
+              </button>
+              <button
+                onClick={() => { logout(); navigate({ to: "/login" }); }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-sm border border-destructive/40 text-destructive text-xs font-mono tracking-wider hover:bg-destructive/10 transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" /> LOGOUT
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
@@ -78,21 +122,29 @@ function Dashboard() {
                 ▸ Modul Intelijen
               </h2>
               <span className="text-[10px] font-mono text-muted-foreground">
-                {FEATURES.length} modul · klik untuk aktifkan
+                {visibleFeatures.length} modul · klik untuk aktifkan
               </span>
             </div>
-            <FeatureGrid active={feature.id} onSelect={setFeature} />
+            <FeatureGrid features={visibleFeatures} active={feature?.id ?? ""} onSelect={setFeature} />
           </section>
 
           <section className="xl:col-span-5 space-y-4">
-            <QueryConsole feature={feature} onSubmit={handleSubmit} loading={loading} />
-            <ResultsPanel result={result} loading={loading} />
+            {feature ? (
+              <>
+                <QueryConsole feature={feature} onSubmit={handleSubmit} loading={loading} />
+                <ResultsPanel result={result} loading={loading} />
+              </>
+            ) : (
+              <div className="panel-frame rounded-sm p-6 text-center text-xs font-mono text-muted-foreground">
+                Belum ada modul yang tersedia untuk Anda.
+              </div>
+            )}
           </section>
         </main>
 
         <footer className="px-6 py-3 border-t border-border text-[10px] font-mono text-muted-foreground flex justify-between">
           <span>JCD OSINT v2.4.1 · Authorized personnel only</span>
-          <span className="text-cyber">SESSION: A7F3-9921-XK</span>
+          <span className="text-cyber">SESSION: {user.username.toUpperCase()}-A7F3-XK</span>
         </footer>
       </div>
     </div>
