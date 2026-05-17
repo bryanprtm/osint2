@@ -1,6 +1,11 @@
 import {
   IdCard, Users, User, HeartPulse, Car, Hash, Binary, Phone,
-  Camera, ScanFace, Radio, Satellite, Newspaper, BarChart3, type LucideIcon,
+  Camera, ScanFace, Radio, Satellite, Newspaper, BarChart3,
+  Network, Bug, ShieldAlert, Lock, FolderSearch, ShieldCheck, Globe2,
+  Activity, Map, Calculator, PackageSearch, FileSearch, Mail, Cpu,
+  FileDigit, Search, ScanLine, KeyRound, FileWarning, Link2, ShieldX,
+  FileCode, FormInput, Code2, Flame, Swords, KeySquare, Unlock, Dices,
+  TerminalSquare, FileJson, ArrowLeftRight, type LucideIcon,
 } from "lucide-react";
 
 export type Feature = {
@@ -10,7 +15,9 @@ export type Feature = {
   desc: string;
   input: string;
   placeholder: string;
-  category: "Identitas" | "Kendaraan" | "Telekomunikasi" | "Biometrik" | "Geo & Sinyal" | "Analitik";
+  category:
+    | "Identitas" | "Kendaraan" | "Telekomunikasi" | "Biometrik" | "Geo & Sinyal" | "Analitik"
+    | "Cybersecurity" | "Jaringan" | "Web Exploit" | "Password & Kripto" | "Utilitas";
   icon: LucideIcon;
 };
 
