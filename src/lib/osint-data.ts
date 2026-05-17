@@ -36,6 +36,56 @@ export const FEATURES: Feature[] = [
   { id: "bts", code: "OSI-012", name: "ANALISA BTS", desc: "Estimasi lokasi via sinyal seluler & BTS", input: "Nomor HP", placeholder: "628xxxxxxxxx", category: "Geo & Sinyal", icon: Radio },
   { id: "pos", code: "OSI-013", name: "POS ALL OPERATOR", desc: "Pelacakan posisi lintas operator", input: "Nomor HP", placeholder: "628xxxxxxxxx", category: "Geo & Sinyal", icon: Satellite },
   { id: "media", code: "OSI-014", name: "MEDIA MONITORING", desc: "Monitoring berita & sosial media", input: "Keyword / Nama", placeholder: "kata kunci...", category: "Analitik", icon: Newspaper },
+
+  // ── Cybersecurity / Vulnerability Scanning ─────────────────────────────────
+  { id: "port-scanner", code: "SEC-015", name: "PORT SCANNER", desc: "Scan port terbuka & service yang berjalan", input: "Host / IP", placeholder: "scanme.nmap.org", category: "Cybersecurity", icon: Network },
+  { id: "sql-injector", code: "SEC-016", name: "SQL INJECTOR", desc: "Uji kerentanan SQL injection pada URL", input: "URL Target", placeholder: "https://target.com/page?id=1", category: "Web Exploit", icon: Bug },
+  { id: "xss-detector", code: "SEC-017", name: "XSS DETECTOR", desc: "Deteksi kerentanan Cross-Site Scripting", input: "URL Target", placeholder: "https://target.com/search?q=", category: "Web Exploit", icon: ShieldAlert },
+  { id: "directory-scanner", code: "SEC-018", name: "DIRECTORY SCANNER", desc: "Temukan direktori & file tersembunyi", input: "URL Target", placeholder: "https://target.com", category: "Cybersecurity", icon: FolderSearch },
+  { id: "ssl-scanner", code: "SEC-019", name: "SSL SCANNER", desc: "Analisa konfigurasi SSL/TLS & sertifikat", input: "Hostname", placeholder: "example.com", category: "Cybersecurity", icon: Lock },
+  { id: "csrf-tester", code: "SEC-020", name: "CSRF TESTER", desc: "Uji kerentanan Cross-Site Request Forgery", input: "URL Form", placeholder: "https://target.com/form", category: "Web Exploit", icon: ShieldX },
+  { id: "zap-scanner", code: "SEC-021", name: "OWASP ZAP SCANNER", desc: "Pemindai kerentanan web menyeluruh (OWASP)", input: "URL Target", placeholder: "https://target.com", category: "Cybersecurity", icon: ScanLine },
+
+  // ── Jaringan ───────────────────────────────────────────────────────────────
+  { id: "ping-sweep", code: "NET-022", name: "PING SWEEP", desc: "Temukan host aktif via ICMP", input: "Subnet / Range", placeholder: "192.168.1.0/24", category: "Jaringan", icon: Activity },
+  { id: "traceroute", code: "NET-023", name: "TRACEROUTE", desc: "Lacak jalur paket ke host tujuan", input: "Host / IP", placeholder: "8.8.8.8", category: "Jaringan", icon: Map },
+  { id: "dns-lookup", code: "NET-024", name: "DNS LOOKUP", desc: "Query record DNS suatu domain", input: "Domain", placeholder: "example.com", category: "Jaringan", icon: Globe2 },
+  { id: "subnet-calculator", code: "NET-025", name: "SUBNET CALCULATOR", desc: "Hitung subnet mask & network address", input: "CIDR", placeholder: "192.168.1.0/24", category: "Jaringan", icon: Calculator },
+  { id: "packet-analyzer", code: "NET-026", name: "PACKET ANALYZER", desc: "Analisa traffic & isi paket jaringan", input: "Interface / File", placeholder: "eth0 / capture.pcap", category: "Jaringan", icon: PackageSearch },
+
+  // ── Information Gathering / Recon ──────────────────────────────────────────
+  { id: "header-analyzer", code: "REC-027", name: "HEADER ANALYZER", desc: "Analisa HTTP header untuk isu keamanan", input: "URL", placeholder: "https://target.com", category: "Cybersecurity", icon: FileSearch },
+  { id: "email-hunter", code: "REC-028", name: "EMAIL HUNTER", desc: "Temukan email yang terkait dengan domain", input: "Domain", placeholder: "example.com", category: "Cybersecurity", icon: Mail },
+  { id: "tech-detector", code: "REC-029", name: "TECH DETECTOR", desc: "Identifikasi teknologi yang digunakan situs", input: "URL", placeholder: "https://target.com", category: "Cybersecurity", icon: Cpu },
+  { id: "metadata-extractor", code: "REC-030", name: "METADATA EXTRACTOR", desc: "Ekstrak metadata dokumen & gambar", input: "URL / File", placeholder: "https://target.com/file.pdf", category: "Cybersecurity", icon: FileDigit },
+  { id: "phone-doxing", code: "REC-031", name: "PHONE DOXING", desc: "Info nomor HP: operator & jejak digital", input: "Nomor HP", placeholder: "+62812xxxxxxxx", category: "Cybersecurity", icon: Phone },
+  { id: "whois-lookup", code: "REC-032", name: "WHOIS LOOKUP", desc: "WHOIS domain lengkap dengan visualisasi", input: "Domain", placeholder: "example.com", category: "Cybersecurity", icon: Search },
+  { id: "search-engines", code: "REC-033", name: "SEARCH ENGINES", desc: "Pencarian intelijen lintas mesin pencari", input: "Keyword / Dork", placeholder: "site:gov.id filetype:pdf", category: "Cybersecurity", icon: Search },
+
+  // ── Security Testing ───────────────────────────────────────────────────────
+  { id: "password-checker", code: "SEC-034", name: "PASSWORD CHECKER", desc: "Uji kekuatan password & deteksi kebocoran", input: "Password", placeholder: "********", category: "Password & Kripto", icon: KeyRound },
+  { id: "file-scanner", code: "SEC-035", name: "FILE SCANNER", desc: "Pindai malware & konten mencurigakan file", input: "URL / Hash", placeholder: "https://... atau SHA256", category: "Cybersecurity", icon: FileWarning },
+  { id: "url-scanner", code: "SEC-036", name: "URL SCANNER", desc: "Cek URL terhadap phishing & reputasi", input: "URL", placeholder: "https://suspicious.link", category: "Cybersecurity", icon: Link2 },
+  { id: "cors-tester", code: "SEC-037", name: "CORS TESTER", desc: "Uji konfigurasi Cross-Origin Resource Sharing", input: "URL Endpoint", placeholder: "https://api.target.com", category: "Cybersecurity", icon: ShieldCheck },
+
+  // ── Web Exploitation ───────────────────────────────────────────────────────
+  { id: "lfi-scanner", code: "WEB-038", name: "LFI SCANNER", desc: "Deteksi kerentanan Local File Inclusion", input: "URL Target", placeholder: "https://target.com/?file=", category: "Web Exploit", icon: FileCode },
+  { id: "rfi-scanner", code: "WEB-039", name: "RFI SCANNER", desc: "Deteksi kerentanan Remote File Inclusion", input: "URL Target", placeholder: "https://target.com/?inc=", category: "Web Exploit", icon: FileCode },
+  { id: "form-fuzzer", code: "WEB-040", name: "FORM FUZZER", desc: "Uji input form untuk validasi & injection", input: "URL Form", placeholder: "https://target.com/login", category: "Web Exploit", icon: FormInput },
+  { id: "xml-injector", code: "WEB-041", name: "XML INJECTOR", desc: "Uji XXE (XML External Entity)", input: "URL Endpoint", placeholder: "https://target.com/api", category: "Web Exploit", icon: Code2 },
+  { id: "beef-xss", code: "WEB-042", name: "BeEF XSS", desc: "Browser Exploitation Framework untuk XSS", input: "URL Target", placeholder: "https://target.com", category: "Web Exploit", icon: Flame },
+  { id: "payload-all-star", code: "WEB-043", name: "PAYLOAD ALL STAR", desc: "Koleksi payload eksploitasi web", input: "Tipe Payload", placeholder: "sqli / xss / ssti", category: "Web Exploit", icon: Swords },
+
+  // ── Password & Kripto ──────────────────────────────────────────────────────
+  { id: "hash-generator", code: "PWD-044", name: "HASH GENERATOR", desc: "Generate hash (MD5, SHA1, SHA256, dll)", input: "Plaintext", placeholder: "teks yang akan di-hash", category: "Password & Kripto", icon: KeySquare },
+  { id: "hash-cracker", code: "PWD-045", name: "HASH CRACKER", desc: "Crack hash via dictionary & brute force", input: "Hash", placeholder: "5f4dcc3b5aa765d61d8327deb882cf99", category: "Password & Kripto", icon: Unlock },
+  { id: "password-generator", code: "PWD-046", name: "PASSWORD GENERATOR", desc: "Buat password acak yang kuat", input: "Panjang", placeholder: "16", category: "Password & Kripto", icon: Dices },
+
+  // ── Shell & Utilitas ───────────────────────────────────────────────────────
+  { id: "shell-uploader", code: "UTL-047", name: "SHELL UPLOADER", desc: "Analisa kerentanan upload shell", input: "URL Target", placeholder: "https://target.com/upload", category: "Web Exploit", icon: TerminalSquare },
+  { id: "base64-encoder", code: "UTL-048", name: "BASE64 ENCODER", desc: "Encode/decode data menggunakan Base64", input: "Teks / Base64", placeholder: "Halo dunia", category: "Utilitas", icon: ArrowLeftRight },
+  { id: "hex-converter", code: "UTL-049", name: "HEX CONVERTER", desc: "Konversi heksadesimal ↔ teks/desimal", input: "Hex / Teks", placeholder: "48656c6c6f", category: "Utilitas", icon: Binary },
+  { id: "json-formatter", code: "UTL-050", name: "JSON FORMATTER", desc: "Format & validasi data JSON", input: "JSON String", placeholder: '{"key":"value"}', category: "Utilitas", icon: FileJson },
 ];
 
 export type OsintResult = {
