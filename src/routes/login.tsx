@@ -107,10 +107,8 @@ function LoginPage() {
             {loading ? "Verifying..." : "Authenticate"}
           </button>
 
-          <div className="text-[10px] font-mono text-muted-foreground border-t border-border pt-3 space-y-1">
-            <div className="text-cyber/80 tracking-widest">▸ DEMO CREDENTIALS</div>
-            <div>ADMIN  ›  <span className="text-foreground">admin</span> / <span className="text-foreground">admin</span></div>
-            <div>OPERATOR ›  <span className="text-foreground">user</span> / <span className="text-foreground">user123</span></div>
+          <div className="text-center text-[10px] font-mono text-muted-foreground mt-4 tracking-wider">
+            UNAUTHORIZED ACCESS IS PROHIBITED · v2.4.1
           </div>
         </form>
 
