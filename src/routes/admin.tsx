@@ -141,7 +141,7 @@ function AdminPage() {
                   <Field label="Deskripsi" value={draft.desc} onChange={(v) => setDraft({ ...draft, desc: v })} full />
                   <Field label="Label Input" value={draft.input} onChange={(v) => setDraft({ ...draft, input: v })} />
                   <Field label="Placeholder" value={draft.placeholder} onChange={(v) => setDraft({ ...draft, placeholder: v })} />
-                  <SelectField label="Kategori" value={draft.category} options={CATEGORIES} onChange={(v) => setDraft({ ...draft, category: v as StoredModule["category"] })} />
+                  <ComboField label="Kategori" value={draft.category} options={categoryOptions} onChange={(v) => setDraft({ ...draft, category: v })} placeholder="Pilih atau ketik kategori baru..." />
                   <SelectField label="Ikon" value={draft.iconKey} options={ICON_OPTIONS} onChange={(v) => setDraft({ ...draft, iconKey: v })} />
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t border-border">
