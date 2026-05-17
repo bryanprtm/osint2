@@ -29,8 +29,21 @@ function AdminPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Omit<StoredModule, "custom">>(EMPTY);
   const [showForm, setShowForm] = useState(false);
+  const [activeCategory, setActiveCategory] = useState("");
 
   const categoryOptions = Array.from(new Set([...DEFAULT_CATEGORIES, ...modules.map((m) => m.category).filter(Boolean)])).sort();
+  const categories = useMemo(() => Array.from(new Set(modules.map((m) => m.category).filter(Boolean))).sort(), [modules]);
+
+  const groupedModules = useMemo(() => {
+    const map = new Map<string, StoredModule[]>();
+    for (const m of modules) {
+      if (activeCategory && m.category !== activeCategory) continue;
+      const key = m.category?.trim() || "Lainnya";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(m);
+    }
+    return Array.from(map.entries());
+  }, [modules, activeCategory]);
 
   const [tgToken, setTgToken] = useState(settings.telegramBotToken);
   const [tgChat, setTgChat] = useState(settings.telegramChatId);
