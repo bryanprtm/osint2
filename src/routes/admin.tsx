@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth, ICON_OPTIONS, iconFor, type StoredModule } from "@/lib/auth";
 import { Sidebar } from "@/components/osint/Sidebar";
 import { StatusBar } from "@/components/osint/StatusBar";
@@ -29,8 +29,21 @@ function AdminPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Omit<StoredModule, "custom">>(EMPTY);
   const [showForm, setShowForm] = useState(false);
+  const [activeCategory, setActiveCategory] = useState("");
 
   const categoryOptions = Array.from(new Set([...DEFAULT_CATEGORIES, ...modules.map((m) => m.category).filter(Boolean)])).sort();
+  const categories = useMemo(() => Array.from(new Set(modules.map((m) => m.category).filter(Boolean))).sort(), [modules]);
+
+  const groupedModules = useMemo(() => {
+    const map = new Map<string, StoredModule[]>();
+    for (const m of modules) {
+      if (activeCategory && m.category !== activeCategory) continue;
+      const key = m.category?.trim() || "Lainnya";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(m);
+    }
+    return Array.from(map.entries());
+  }, [modules, activeCategory]);
 
   const [tgToken, setTgToken] = useState(settings.telegramBotToken);
   const [tgChat, setTgChat] = useState(settings.telegramChatId);
@@ -87,7 +100,7 @@ function AdminPage() {
 
   return (
     <div className="min-h-screen flex w-full">
-      <Sidebar />
+      <Sidebar categories={categories} activeCategory={activeCategory} onSelectCategory={setActiveCategory} />
       <div className="flex-1 flex flex-col min-w-0">
         <StatusBar />
 
@@ -117,7 +130,9 @@ function AdminPage() {
           {/* Modules */}
           <section className="xl:col-span-2 space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-xs font-mono uppercase tracking-[0.3em] text-cyber">▸ Daftar Modul ({modules.length})</h2>
+              <h2 className="text-xs font-mono uppercase tracking-[0.3em] text-cyber">
+                ▸ Daftar Modul {activeCategory ? `· ${activeCategory}` : ""} ({activeCategory ? groupedModules[0]?.[1].length ?? 0 : modules.length})
+              </h2>
               <div className="flex gap-2">
                 <button onClick={resetModules} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm border border-border text-[10px] font-mono hover:border-cyber hover:text-cyber">
                   <RotateCcw className="w-3 h-3" /> RESET
@@ -158,33 +173,44 @@ function AdminPage() {
               </div>
             )}
 
-            <div className="space-y-1.5">
-              {modules.map((m) => {
-                const Icon = iconFor(m.iconKey);
-                return (
-                  <div key={m.id} className={`panel-frame rounded-sm p-3 flex items-center gap-3 ${m.enabled ? "" : "opacity-50"}`}>
-                    <div className={`p-2 rounded-sm ${m.enabled ? "bg-cyber/15 text-cyber" : "bg-secondary text-muted-foreground"}`}>
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-cyber/80">{m.code}</span>
-                        <span className="text-sm font-semibold truncate">{m.name}</span>
-                        {m.custom && <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-sm bg-success/15 text-success">CUSTOM</span>}
-                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-sm bg-secondary text-muted-foreground">{m.category}</span>
-                      </div>
-                      <div className="text-[11px] text-muted-foreground truncate">{m.desc}</div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <IconBtn title={m.enabled ? "Sembunyikan" : "Tampilkan"} onClick={() => toggleModule(m.id, !m.enabled)}>
-                        {m.enabled ? <Eye className="w-4 h-4 text-cyber" /> : <EyeOff className="w-4 h-4" />}
-                      </IconBtn>
-                      <IconBtn title="Edit" onClick={() => startEdit(m)}><Pencil className="w-4 h-4" /></IconBtn>
-                      <IconBtn title="Hapus" onClick={() => removeModule(m.id)}><Trash2 className="w-4 h-4 text-destructive" /></IconBtn>
-                    </div>
+            <div className="space-y-4">
+              {groupedModules.map(([cat, items]) => (
+                <div key={cat} className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono uppercase tracking-[0.3em] text-cyber/80">▸ {cat}</span>
+                    <span className="text-[10px] font-mono text-muted-foreground">[{items.length}]</span>
+                    <div className="flex-1 h-px bg-border/60" />
                   </div>
-                );
-              })}
+                  <div className="space-y-1.5">
+                    {items.map((m) => {
+                      const Icon = iconFor(m.iconKey);
+                      return (
+                        <div key={m.id} className={`panel-frame rounded-sm p-3 flex items-center gap-3 ${m.enabled ? "" : "opacity-50"}`}>
+                          <div className={`p-2 rounded-sm ${m.enabled ? "bg-cyber/15 text-cyber" : "bg-secondary text-muted-foreground"}`}>
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-mono text-cyber/80">{m.code}</span>
+                              <span className="text-sm font-semibold truncate">{m.name}</span>
+                              {m.custom && <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-sm bg-success/15 text-success">CUSTOM</span>}
+                              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-sm bg-secondary text-muted-foreground">{m.category}</span>
+                            </div>
+                            <div className="text-[11px] text-muted-foreground truncate">{m.desc}</div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <IconBtn title={m.enabled ? "Sembunyikan" : "Tampilkan"} onClick={() => toggleModule(m.id, !m.enabled)}>
+                              {m.enabled ? <Eye className="w-4 h-4 text-cyber" /> : <EyeOff className="w-4 h-4" />}
+                            </IconBtn>
+                            <IconBtn title="Edit" onClick={() => startEdit(m)}><Pencil className="w-4 h-4" /></IconBtn>
+                            <IconBtn title="Hapus" onClick={() => removeModule(m.id)}><Trash2 className="w-4 h-4 text-destructive" /></IconBtn>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
 
