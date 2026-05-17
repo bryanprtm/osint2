@@ -1,7 +1,12 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import {
   IdCard, Users, User, HeartPulse, Car, Hash, Binary, Phone,
-  Camera, ScanFace, Radio, Satellite, Newspaper, Database, type LucideIcon,
+  Camera, ScanFace, Radio, Satellite, Newspaper, Database,
+  Network, Bug, ShieldAlert, Lock, FolderSearch, ShieldCheck, Globe2,
+  Activity, Map, Calculator, PackageSearch, FileSearch, Mail, Cpu,
+  FileDigit, Search, ScanLine, KeyRound, FileWarning, Link2, ShieldX,
+  FileCode, FormInput, Code2, Flame, Swords, KeySquare, Unlock, Dices,
+  TerminalSquare, FileJson, ArrowLeftRight, type LucideIcon,
 } from "lucide-react";
 import { FEATURES, type Feature } from "@/lib/osint-data";
 
@@ -39,6 +44,11 @@ export type AppSettings = {
 const ICON_MAP: Record<string, LucideIcon> = {
   IdCard, Users, User, HeartPulse, Car, Hash, Binary, Phone,
   Camera, ScanFace, Radio, Satellite, Newspaper, Database,
+  Network, Bug, ShieldAlert, Lock, FolderSearch, ShieldCheck, Globe2,
+  Activity, Map, Calculator, PackageSearch, FileSearch, Mail, Cpu,
+  FileDigit, Search, ScanLine, KeyRound, FileWarning, Link2, ShieldX,
+  FileCode, FormInput, Code2, Flame, Swords, KeySquare, Unlock, Dices,
+  TerminalSquare, FileJson, ArrowLeftRight,
 };
 
 export function iconFor(key: string): LucideIcon {
@@ -87,7 +97,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const a = localStorage.getItem(AUTH_KEY);
       if (a) setUser(JSON.parse(a));
       const m = localStorage.getItem(MODULES_KEY);
-      if (m) setModules(JSON.parse(m));
+      if (m) {
+        const stored: StoredModule[] = JSON.parse(m);
+        // Merge: keep stored prefs, append any new default modules not yet present
+        const ids = new Set(stored.map((x) => x.id));
+        const merged = [...stored, ...DEFAULT_MODULES.filter((d) => !ids.has(d.id))];
+        setModules(merged);
+        if (merged.length !== stored.length) {
+          localStorage.setItem(MODULES_KEY, JSON.stringify(merged));
+        }
+      }
       const s = localStorage.getItem(SETTINGS_KEY);
       if (s) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(s) });
     } catch {
