@@ -76,7 +76,7 @@ function Dashboard() {
 
   return (
     <div className="min-h-screen flex w-full">
-      <Sidebar />
+      <Sidebar categories={categories} activeCategory={activeCategory} onSelectCategory={setActiveCategory} />
 
       <div className="flex-1 flex flex-col min-w-0">
         <StatusBar />
