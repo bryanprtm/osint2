@@ -30,6 +30,8 @@ function AdminPage() {
   const [draft, setDraft] = useState<Omit<StoredModule, "custom">>(EMPTY);
   const [showForm, setShowForm] = useState(false);
 
+  const categoryOptions = Array.from(new Set([...DEFAULT_CATEGORIES, ...modules.map((m) => m.category).filter(Boolean)])).sort();
+
   const [tgToken, setTgToken] = useState(settings.telegramBotToken);
   const [tgChat, setTgChat] = useState(settings.telegramChatId);
   const [tgEnabled, setTgEnabled] = useState(settings.telegramEnabled);
