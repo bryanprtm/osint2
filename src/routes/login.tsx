@@ -107,9 +107,6 @@ function LoginPage() {
             {loading ? "Verifying..." : "Authenticate"}
           </button>
 
-          <div className="text-center text-[10px] font-mono text-muted-foreground mt-4 tracking-wider">
-            UNAUTHORIZED ACCESS IS PROHIBITED · v2.4.1
-          </div>
         </form>
 
         <p className="text-center text-[10px] font-mono text-muted-foreground mt-4 tracking-wider">
