@@ -203,7 +203,7 @@ function AdminPage() {
                               {m.enabled ? <Eye className="w-4 h-4 text-cyber" /> : <EyeOff className="w-4 h-4" />}
                             </IconBtn>
                             <IconBtn title="Edit" onClick={() => startEdit(m)}><Pencil className="w-4 h-4" /></IconBtn>
-                            <IconBtn title="Hapus" onClick={() => removeModule(m.id)}><Trash2 className="w-4 h-4 text-destructive" /></IconBtn>
+                            <IconBtn title="Hapus" onClick={() => { if (confirm(`Hapus modul "${m.name}"? Tindakan ini tidak bisa dibatalkan (gunakan RESET untuk mengembalikan modul bawaan).`)) removeModule(m.id); }}><Trash2 className="w-4 h-4 text-destructive" /></IconBtn>
                           </div>
                         </div>
                       );
