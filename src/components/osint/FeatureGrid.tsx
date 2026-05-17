@@ -1,9 +1,16 @@
-import { FEATURES, type Feature } from "@/lib/osint-data";
+import type { Feature } from "@/lib/osint-data";
 
-export function FeatureGrid({ active, onSelect }: { active: string; onSelect: (f: Feature) => void }) {
+export function FeatureGrid({ features, active, onSelect }: { features: Feature[]; active: string; onSelect: (f: Feature) => void }) {
+  if (features.length === 0) {
+    return (
+      <div className="panel-frame rounded-sm p-6 text-center text-xs font-mono text-muted-foreground">
+        Tidak ada modul yang ditampilkan. Hubungi administrator.
+      </div>
+    );
+  }
   return (
     <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-      {FEATURES.map((f) => {
+      {features.map((f) => {
         const Icon = f.icon;
         const isActive = f.id === active;
         return (
