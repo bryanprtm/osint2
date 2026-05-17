@@ -19,7 +19,7 @@ export function Sidebar() {
           <img src={logo} alt="Logo" className="w-full h-full object-contain drop-shadow-[0_0_8px_rgba(0,229,255,0.35)]" />
         </div>
         <div className="hidden lg:block">
-          <div className="text-sm font-bold tracking-wider text-foreground">JCD OSINT</div>
+          <div className="text-sm font-bold tracking-wider text-foreground">Den 404 Anti Eror OSINT</div>
           <div className="text-[10px] font-mono text-cyber tracking-widest">PROFILER //ID</div>
         </div>
       </div>
