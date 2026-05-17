@@ -131,13 +131,13 @@ function Dashboard() {
           <section className="xl:col-span-7 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-mono uppercase tracking-[0.3em] text-cyber">
-                ▸ Modul Intelijen
+                ▸ Modul Intelijen {activeCategory ? `· ${activeCategory}` : ""}
               </h2>
               <span className="text-[10px] font-mono text-muted-foreground">
-                {visibleFeatures.length} modul · klik untuk aktifkan
+                {filteredFeatures.length} modul · klik untuk aktifkan
               </span>
             </div>
-            <FeatureGrid features={visibleFeatures} active={feature?.id ?? ""} onSelect={setFeature} />
+            <FeatureGrid features={filteredFeatures} active={feature?.id ?? ""} onSelect={setFeature} />
           </section>
 
           <section className="xl:col-span-5 space-y-4">
