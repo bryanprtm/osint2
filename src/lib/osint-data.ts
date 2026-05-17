@@ -15,9 +15,7 @@ export type Feature = {
   desc: string;
   input: string;
   placeholder: string;
-  category:
-    | "Identitas" | "Kendaraan" | "Telekomunikasi" | "Biometrik" | "Geo & Sinyal" | "Analitik"
-    | "Cybersecurity" | "Jaringan" | "Web Exploit" | "Password & Kripto" | "Utilitas";
+  category: string;
   icon: LucideIcon;
 };
 

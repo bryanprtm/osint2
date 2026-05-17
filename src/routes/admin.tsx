@@ -12,8 +12,9 @@ export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "Admin · Den 404 Anti Eror" }] }),
 });
 
-const CATEGORIES: StoredModule["category"][] = [
+const DEFAULT_CATEGORIES = [
   "Identitas", "Kendaraan", "Telekomunikasi", "Biometrik", "Geo & Sinyal", "Analitik",
+  "Cybersecurity", "Jaringan", "Web Exploit", "Password & Kripto", "Utilitas",
 ];
 
 const EMPTY: Omit<StoredModule, "custom"> = {
@@ -28,6 +29,8 @@ function AdminPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Omit<StoredModule, "custom">>(EMPTY);
   const [showForm, setShowForm] = useState(false);
+
+  const categoryOptions = Array.from(new Set([...DEFAULT_CATEGORIES, ...modules.map((m) => m.category).filter(Boolean)])).sort();
 
   const [tgToken, setTgToken] = useState(settings.telegramBotToken);
   const [tgChat, setTgChat] = useState(settings.telegramChatId);
@@ -140,7 +143,7 @@ function AdminPage() {
                   <Field label="Deskripsi" value={draft.desc} onChange={(v) => setDraft({ ...draft, desc: v })} full />
                   <Field label="Label Input" value={draft.input} onChange={(v) => setDraft({ ...draft, input: v })} />
                   <Field label="Placeholder" value={draft.placeholder} onChange={(v) => setDraft({ ...draft, placeholder: v })} />
-                  <SelectField label="Kategori" value={draft.category} options={CATEGORIES} onChange={(v) => setDraft({ ...draft, category: v as StoredModule["category"] })} />
+                  <ComboField label="Kategori" value={draft.category} options={categoryOptions} onChange={(v) => setDraft({ ...draft, category: v })} placeholder="Pilih atau ketik kategori baru..." />
                   <SelectField label="Ikon" value={draft.iconKey} options={ICON_OPTIONS} onChange={(v) => setDraft({ ...draft, iconKey: v })} />
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t border-border">
@@ -265,6 +268,28 @@ function SelectField({ label, value, options, onChange }: {
   );
 }
 
+function ComboField({ label, value, options, onChange, placeholder }: {
+  label: string; value: string; options: string[]; onChange: (v: string) => void; placeholder?: string;
+}) {
+  const listId = `cat-list-${label.replace(/\s+/g, "-")}`;
+  return (
+    <div>
+      <label className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">{label}</label>
+      <input
+        list={listId}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="mt-1 w-full bg-input/40 border border-border focus:border-cyber outline-none px-2.5 py-1.5 rounded-sm text-sm"
+      />
+      <datalist id={listId}>
+        {options.map((o) => <option key={o} value={o} />)}
+      </datalist>
+      <div className="text-[9px] font-mono text-muted-foreground/70 mt-1">Pilih dari daftar atau ketik kategori baru</div>
+    </div>
+  );
+}
+
 function IconBtn({ children, onClick, title }: { children: React.ReactNode; onClick: () => void; title: string }) {
   return (
     <button title={title} onClick={onClick} className="p-1.5 rounded-sm hover:bg-panel-elevated transition-colors text-muted-foreground hover:text-foreground">
@@ -272,3 +297,4 @@ function IconBtn({ children, onClick, title }: { children: React.ReactNode; onCl
     </button>
   );
 }
+
