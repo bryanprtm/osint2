@@ -97,7 +97,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const a = localStorage.getItem(AUTH_KEY);
       if (a) setUser(JSON.parse(a));
       const m = localStorage.getItem(MODULES_KEY);
-      if (m) setModules(JSON.parse(m));
+      if (m) {
+        const stored: StoredModule[] = JSON.parse(m);
+        // Merge: keep stored prefs, append any new default modules not yet present
+        const ids = new Set(stored.map((x) => x.id));
+        const merged = [...stored, ...DEFAULT_MODULES.filter((d) => !ids.has(d.id))];
+        setModules(merged);
+        if (merged.length !== stored.length) {
+          localStorage.setItem(MODULES_KEY, JSON.stringify(merged));
+        }
+      }
       const s = localStorage.getItem(SETTINGS_KEY);
       if (s) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(s) });
     } catch {
