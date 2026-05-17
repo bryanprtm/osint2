@@ -12,8 +12,9 @@ export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "Admin · Den 404 Anti Eror" }] }),
 });
 
-const CATEGORIES: StoredModule["category"][] = [
+const DEFAULT_CATEGORIES = [
   "Identitas", "Kendaraan", "Telekomunikasi", "Biometrik", "Geo & Sinyal", "Analitik",
+  "Cybersecurity", "Jaringan", "Web Exploit", "Password & Kripto", "Utilitas",
 ];
 
 const EMPTY: Omit<StoredModule, "custom"> = {
