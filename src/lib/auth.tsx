@@ -149,10 +149,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       persistModules(modules.map((m) => (m.id === id ? { ...m, ...patch } : m)));
     },
     removeModule: (id) => {
-      const target = modules.find((m) => m.id === id);
-      if (!target) return;
-      if (target.custom) persistModules(modules.filter((m) => m.id !== id));
-      else persistModules(modules.map((m) => (m.id === id ? { ...m, enabled: false } : m)));
+      if (!modules.some((m) => m.id === id)) return;
+      persistModules(modules.filter((m) => m.id !== id));
     },
     toggleModule: (id, enabled) => {
       persistModules(modules.map((m) => (m.id === id ? { ...m, enabled } : m)));
