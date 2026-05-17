@@ -173,33 +173,44 @@ function AdminPage() {
               </div>
             )}
 
-            <div className="space-y-1.5">
-              {modules.map((m) => {
-                const Icon = iconFor(m.iconKey);
-                return (
-                  <div key={m.id} className={`panel-frame rounded-sm p-3 flex items-center gap-3 ${m.enabled ? "" : "opacity-50"}`}>
-                    <div className={`p-2 rounded-sm ${m.enabled ? "bg-cyber/15 text-cyber" : "bg-secondary text-muted-foreground"}`}>
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-cyber/80">{m.code}</span>
-                        <span className="text-sm font-semibold truncate">{m.name}</span>
-                        {m.custom && <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-sm bg-success/15 text-success">CUSTOM</span>}
-                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-sm bg-secondary text-muted-foreground">{m.category}</span>
-                      </div>
-                      <div className="text-[11px] text-muted-foreground truncate">{m.desc}</div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <IconBtn title={m.enabled ? "Sembunyikan" : "Tampilkan"} onClick={() => toggleModule(m.id, !m.enabled)}>
-                        {m.enabled ? <Eye className="w-4 h-4 text-cyber" /> : <EyeOff className="w-4 h-4" />}
-                      </IconBtn>
-                      <IconBtn title="Edit" onClick={() => startEdit(m)}><Pencil className="w-4 h-4" /></IconBtn>
-                      <IconBtn title="Hapus" onClick={() => removeModule(m.id)}><Trash2 className="w-4 h-4 text-destructive" /></IconBtn>
-                    </div>
+            <div className="space-y-4">
+              {groupedModules.map(([cat, items]) => (
+                <div key={cat} className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono uppercase tracking-[0.3em] text-cyber/80">▸ {cat}</span>
+                    <span className="text-[10px] font-mono text-muted-foreground">[{items.length}]</span>
+                    <div className="flex-1 h-px bg-border/60" />
                   </div>
-                );
-              })}
+                  <div className="space-y-1.5">
+                    {items.map((m) => {
+                      const Icon = iconFor(m.iconKey);
+                      return (
+                        <div key={m.id} className={`panel-frame rounded-sm p-3 flex items-center gap-3 ${m.enabled ? "" : "opacity-50"}`}>
+                          <div className={`p-2 rounded-sm ${m.enabled ? "bg-cyber/15 text-cyber" : "bg-secondary text-muted-foreground"}`}>
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-mono text-cyber/80">{m.code}</span>
+                              <span className="text-sm font-semibold truncate">{m.name}</span>
+                              {m.custom && <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-sm bg-success/15 text-success">CUSTOM</span>}
+                              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-sm bg-secondary text-muted-foreground">{m.category}</span>
+                            </div>
+                            <div className="text-[11px] text-muted-foreground truncate">{m.desc}</div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <IconBtn title={m.enabled ? "Sembunyikan" : "Tampilkan"} onClick={() => toggleModule(m.id, !m.enabled)}>
+                              {m.enabled ? <Eye className="w-4 h-4 text-cyber" /> : <EyeOff className="w-4 h-4" />}
+                            </IconBtn>
+                            <IconBtn title="Edit" onClick={() => startEdit(m)}><Pencil className="w-4 h-4" /></IconBtn>
+                            <IconBtn title="Hapus" onClick={() => removeModule(m.id)}><Trash2 className="w-4 h-4 text-destructive" /></IconBtn>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
 
