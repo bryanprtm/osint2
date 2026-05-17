@@ -1,9 +1,23 @@
 import { Activity, Radio, ShieldCheck, Cpu } from "lucide-react";
+import { useState, useEffect } from "react";
 
 export function StatusBar() {
-  const now = new Date();
-  const time = now.toLocaleTimeString("id-ID", { hour12: false });
-  const date = now.toLocaleDateString("id-ID", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+  const [now, setNow] = useState<string[]>(["", ""]);
+
+  useEffect(() => {
+    const tick = () => {
+      const d = new Date();
+      const time = d.toLocaleTimeString("id-ID", { hour12: false });
+      const date = d.toLocaleDateString("id-ID", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+      setNow([date, time]);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const date = now[0];
+  const time = now[1];
 
   return (
     <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2 border-b border-border bg-panel/60 backdrop-blur text-xs font-mono">
