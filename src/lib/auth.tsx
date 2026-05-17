@@ -1,7 +1,12 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import {
   IdCard, Users, User, HeartPulse, Car, Hash, Binary, Phone,
-  Camera, ScanFace, Radio, Satellite, Newspaper, Database, type LucideIcon,
+  Camera, ScanFace, Radio, Satellite, Newspaper, Database,
+  Network, Bug, ShieldAlert, Lock, FolderSearch, ShieldCheck, Globe2,
+  Activity, Map, Calculator, PackageSearch, FileSearch, Mail, Cpu,
+  FileDigit, Search, ScanLine, KeyRound, FileWarning, Link2, ShieldX,
+  FileCode, FormInput, Code2, Flame, Swords, KeySquare, Unlock, Dices,
+  TerminalSquare, FileJson, ArrowLeftRight, type LucideIcon,
 } from "lucide-react";
 import { FEATURES, type Feature } from "@/lib/osint-data";
 
