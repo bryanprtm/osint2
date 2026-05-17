@@ -69,7 +69,7 @@ function Dashboard() {
 
   const stats = [
     { label: "Modul Aktif", value: visibleFeatures.length, accent: "text-cyber" },
-    { label: "Query Hari Ini", value: "1,284", accent: "text-success" },
+    { label: "Kategori", value: categories.length, accent: "text-success" },
     { label: "Sumber Data", value: "12", accent: "text-cyber" },
     { label: "Uptime", value: "99.98%", accent: "text-success" },
   ];
