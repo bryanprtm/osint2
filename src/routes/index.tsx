@@ -13,7 +13,7 @@ export const Route = createFileRoute("/")({
   component: Dashboard,
   head: () => ({
     meta: [
-      { title: "JCD OSINT — Command Center" },
+      { title: "Den 404 Anti Eror OSINT — Command Center" },
       { name: "description", content: "Dashboard intelijen OSINT terintegrasi: identitas, kendaraan, telekomunikasi, biometrik, geo-sinyal, dan analitik." },
     ],
   }),
@@ -143,7 +143,7 @@ function Dashboard() {
         </main>
 
         <footer className="px-6 py-3 border-t border-border text-[10px] font-mono text-muted-foreground flex justify-between">
-          <span>JCD OSINT v2.4.1 · Authorized personnel only</span>
+          <span>Den 404 Anti Eror OSINT v2.4.1 · Authorized personnel only</span>
           <span className="text-cyber">SESSION: {user.username.toUpperCase()}-A7F3-XK</span>
         </footer>
       </div>

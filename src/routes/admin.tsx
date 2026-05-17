@@ -9,7 +9,7 @@ import {
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
-  head: () => ({ meta: [{ title: "Admin · JCD OSINT" }] }),
+  head: () => ({ meta: [{ title: "Admin · Den 404 Anti Eror" }] }),
 });
 
 const CATEGORIES: StoredModule["category"][] = [
