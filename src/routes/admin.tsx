@@ -100,7 +100,7 @@ function AdminPage() {
 
   return (
     <div className="min-h-screen flex w-full">
-      <Sidebar />
+      <Sidebar categories={categories} activeCategory={activeCategory} onSelectCategory={setActiveCategory} />
       <div className="flex-1 flex flex-col min-w-0">
         <StatusBar />
 
@@ -130,7 +130,9 @@ function AdminPage() {
           {/* Modules */}
           <section className="xl:col-span-2 space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-xs font-mono uppercase tracking-[0.3em] text-cyber">▸ Daftar Modul ({modules.length})</h2>
+              <h2 className="text-xs font-mono uppercase tracking-[0.3em] text-cyber">
+                ▸ Daftar Modul {activeCategory ? `· ${activeCategory}` : ""} ({activeCategory ? groupedModules[0]?.[1].length ?? 0 : modules.length})
+              </h2>
               <div className="flex gap-2">
                 <button onClick={resetModules} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm border border-border text-[10px] font-mono hover:border-cyber hover:text-cyber">
                   <RotateCcw className="w-3 h-3" /> RESET
