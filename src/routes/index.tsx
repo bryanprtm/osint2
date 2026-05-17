@@ -23,10 +23,22 @@ function Dashboard() {
   const { ready, user, modules, settings, logout } = useAuth();
   const navigate = useNavigate();
 
+  const [activeCategory, setActiveCategory] = useState<string>("");
+
   const visibleFeatures: Feature[] = useMemo(
     () => modules.filter((m) => m.enabled).map(storedToFeature),
     [modules],
   );
+
+  const categories = useMemo(() => {
+    const set = new Set(visibleFeatures.map((f) => f.category));
+    return Array.from(set).sort();
+  }, [visibleFeatures]);
+
+  const filteredFeatures = useMemo(() => {
+    if (!activeCategory) return visibleFeatures;
+    return visibleFeatures.filter((f) => f.category === activeCategory);
+  }, [visibleFeatures, activeCategory]);
 
   const [feature, setFeature] = useState<Feature | null>(null);
   const [result, setResult] = useState<OsintResult | null>(null);
@@ -37,11 +49,11 @@ function Dashboard() {
   }, [ready, user, navigate]);
 
   useEffect(() => {
-    if (!feature && visibleFeatures.length > 0) setFeature(visibleFeatures[0]);
-    else if (feature && !visibleFeatures.some((f) => f.id === feature.id)) {
-      setFeature(visibleFeatures[0] ?? null);
+    if (!feature && filteredFeatures.length > 0) setFeature(filteredFeatures[0]);
+    else if (feature && !filteredFeatures.some((f) => f.id === feature.id)) {
+      setFeature(filteredFeatures[0] ?? null);
     }
-  }, [visibleFeatures, feature]);
+  }, [filteredFeatures, feature]);
 
   if (!ready || !user) return null;
 
@@ -57,14 +69,14 @@ function Dashboard() {
 
   const stats = [
     { label: "Modul Aktif", value: visibleFeatures.length, accent: "text-cyber" },
-    { label: "Query Hari Ini", value: "1,284", accent: "text-success" },
+    { label: "Kategori", value: categories.length, accent: "text-success" },
     { label: "Sumber Data", value: "12", accent: "text-cyber" },
     { label: "Uptime", value: "99.98%", accent: "text-success" },
   ];
 
   return (
     <div className="min-h-screen flex w-full">
-      <Sidebar />
+      <Sidebar categories={categories} activeCategory={activeCategory} onSelectCategory={setActiveCategory} />
 
       <div className="flex-1 flex flex-col min-w-0">
         <StatusBar />
@@ -119,13 +131,13 @@ function Dashboard() {
           <section className="xl:col-span-7 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-mono uppercase tracking-[0.3em] text-cyber">
-                ▸ Modul Intelijen
+                ▸ Modul Intelijen {activeCategory ? `· ${activeCategory}` : ""}
               </h2>
               <span className="text-[10px] font-mono text-muted-foreground">
-                {visibleFeatures.length} modul · klik untuk aktifkan
+                {filteredFeatures.length} modul · klik untuk aktifkan
               </span>
             </div>
-            <FeatureGrid features={visibleFeatures} active={feature?.id ?? ""} onSelect={setFeature} />
+            <FeatureGrid features={filteredFeatures} active={feature?.id ?? ""} onSelect={setFeature} />
           </section>
 
           <section className="xl:col-span-5 space-y-4">
