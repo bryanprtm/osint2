@@ -23,10 +23,22 @@ function Dashboard() {
   const { ready, user, modules, settings, logout } = useAuth();
   const navigate = useNavigate();
 
+  const [activeCategory, setActiveCategory] = useState<string>("");
+
   const visibleFeatures: Feature[] = useMemo(
     () => modules.filter((m) => m.enabled).map(storedToFeature),
     [modules],
   );
+
+  const categories = useMemo(() => {
+    const set = new Set(visibleFeatures.map((f) => f.category));
+    return Array.from(set).sort();
+  }, [visibleFeatures]);
+
+  const filteredFeatures = useMemo(() => {
+    if (!activeCategory) return visibleFeatures;
+    return visibleFeatures.filter((f) => f.category === activeCategory);
+  }, [visibleFeatures, activeCategory]);
 
   const [feature, setFeature] = useState<Feature | null>(null);
   const [result, setResult] = useState<OsintResult | null>(null);
@@ -37,11 +49,11 @@ function Dashboard() {
   }, [ready, user, navigate]);
 
   useEffect(() => {
-    if (!feature && visibleFeatures.length > 0) setFeature(visibleFeatures[0]);
-    else if (feature && !visibleFeatures.some((f) => f.id === feature.id)) {
-      setFeature(visibleFeatures[0] ?? null);
+    if (!feature && filteredFeatures.length > 0) setFeature(filteredFeatures[0]);
+    else if (feature && !filteredFeatures.some((f) => f.id === feature.id)) {
+      setFeature(filteredFeatures[0] ?? null);
     }
-  }, [visibleFeatures, feature]);
+  }, [filteredFeatures, feature]);
 
   if (!ready || !user) return null;
 
