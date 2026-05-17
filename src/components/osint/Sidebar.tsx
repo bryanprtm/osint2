@@ -1,4 +1,5 @@
 import { Crosshair, Database, Map, FileSearch, Activity, Settings, LogOut, Shield } from "lucide-react";
+import logo from "@/assets/logo.png";
 
 const NAV = [
   { icon: Crosshair, label: "Intelijen", active: true },
@@ -14,8 +15,8 @@ export function Sidebar() {
   return (
     <aside className="w-16 lg:w-56 shrink-0 border-r border-border bg-sidebar flex flex-col">
       <div className="p-4 border-b border-border flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-sm border border-cyber bg-cyber/10 flex items-center justify-center glow-cyber">
-          <Crosshair className="w-5 h-5 text-cyber" />
+        <div className="w-10 h-10 flex items-center justify-center shrink-0">
+          <img src={logo} alt="Logo" className="w-full h-full object-contain drop-shadow-[0_0_8px_rgba(0,229,255,0.35)]" />
         </div>
         <div className="hidden lg:block">
           <div className="text-sm font-bold tracking-wider text-foreground">JCD OSINT</div>

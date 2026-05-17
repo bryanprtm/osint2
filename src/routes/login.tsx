@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Crosshair, Lock, User as UserIcon, Loader2, ShieldAlert } from "lucide-react";
+import { Lock, User as UserIcon, Loader2, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import logo from "@/assets/logo.png";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -39,8 +40,8 @@ function LoginPage() {
 
       <div className="relative w-full max-w-md">
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-sm border border-cyber bg-cyber/10 glow-cyber mb-3">
-            <Crosshair className="w-8 h-8 text-cyber" />
+          <div className="inline-flex items-center justify-center w-20 h-20 mb-3">
+            <img src={logo} alt="Logo" className="w-full h-full object-contain drop-shadow-[0_0_12px_rgba(0,229,255,0.35)]" />
           </div>
           <h1 className="text-2xl font-bold tracking-wider">
             JCD <span className="text-cyber text-glow">OSINT</span>
