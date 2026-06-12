@@ -1,5 +1,9 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { loginCheck } from "@/lib/users.functions";
+import {
+  listModules, upsertModule, patchModule, deleteModule, resetModulesAll,
+  getAppSettings, updateAppSettings,
+} from "@/lib/modules.functions";
 import {
   IdCard, Users, User, HeartPulse, Car, Hash, Binary, Phone,
   Camera, ScanFace, Radio, Satellite, Newspaper, Database,
@@ -15,8 +19,6 @@ export type Role = "admin" | "operator";
 export type AuthUser = { id?: string; username: string; role: Role; label: string };
 
 const AUTH_KEY = "jcd_osint_auth";
-const MODULES_KEY = "jcd_osint_modules";
-const SETTINGS_KEY = "jcd_osint_settings";
 
 export type StoredModule = {
   id: string;
@@ -53,16 +55,17 @@ export function iconFor(key: string): LucideIcon {
 
 export const ICON_OPTIONS = Object.keys(ICON_MAP);
 
-function featureToStored(f: Feature): StoredModule {
+function featureToStored(f: Feature, i: number): StoredModule & { sort_order: number } {
   const iconKey = Object.entries(ICON_MAP).find(([, v]) => v === f.icon)?.[0] ?? "Database";
   return {
     id: f.id, code: f.code, name: f.name, desc: f.desc,
     input: f.input, placeholder: f.placeholder, category: f.category,
-    iconKey, enabled: true, custom: false,
+    iconKey, enabled: true, custom: false, sort_order: i,
   };
 }
 
-const DEFAULT_MODULES: StoredModule[] = FEATURES.map(featureToStored);
+const DEFAULT_MODULES_FULL = FEATURES.map((f, i) => featureToStored(f, i));
+const DEFAULT_MODULES: StoredModule[] = DEFAULT_MODULES_FULL.map(({ sort_order: _s, ...m }) => m);
 const DEFAULT_SETTINGS: AppSettings = { telegramBotToken: "", telegramChatId: "", telegramEnabled: false };
 
 type AuthCtx = {
@@ -72,12 +75,13 @@ type AuthCtx = {
   settings: AppSettings;
   login: (u: string, p: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
-  addModule: (m: Omit<StoredModule, "custom">) => void;
-  updateModule: (id: string, patch: Partial<StoredModule>) => void;
-  removeModule: (id: string) => void;
-  toggleModule: (id: string, enabled: boolean) => void;
-  resetModules: () => void;
-  updateSettings: (patch: Partial<AppSettings>) => void;
+  addModule: (m: Omit<StoredModule, "custom">) => Promise<void>;
+  updateModule: (id: string, patch: Partial<StoredModule>) => Promise<void>;
+  removeModule: (id: string) => Promise<void>;
+  toggleModule: (id: string, enabled: boolean) => Promise<void>;
+  resetModules: () => Promise<void>;
+  updateSettings: (patch: Partial<AppSettings>) => Promise<void>;
+  refreshModules: () => Promise<void>;
 };
 
 const Ctx = createContext<AuthCtx | null>(null);
@@ -87,39 +91,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [modules, setModules] = useState<StoredModule[]>(DEFAULT_MODULES);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const seedingRef = useRef(false);
+
+  const fetchModules = useCallback(async () => {
+    try {
+      const r = await listModules();
+      if (r.modules.length === 0 && !seedingRef.current) {
+        // First boot: seed defaults into the shared DB so all users start in sync.
+        seedingRef.current = true;
+        try {
+          await resetModulesAll({ data: { modules: DEFAULT_MODULES_FULL } });
+          const r2 = await listModules();
+          setModules(r2.modules.map(({ sort_order: _s, ...m }) => m as StoredModule));
+        } finally {
+          seedingRef.current = false;
+        }
+      } else {
+        setModules(r.modules.map(({ sort_order: _s, ...m }) => m as StoredModule));
+      }
+    } catch {
+      /* keep last known modules on transient failures */
+    }
+  }, []);
+
+  const fetchSettings = useCallback(async () => {
+    try {
+      const r = await getAppSettings();
+      setSettings(r.settings);
+    } catch {
+      /* keep last known settings */
+    }
+  }, []);
 
   useEffect(() => {
     try {
       const a = localStorage.getItem(AUTH_KEY);
       if (a) setUser(JSON.parse(a));
-      const m = localStorage.getItem(MODULES_KEY);
-      if (m) {
-        const stored: StoredModule[] = JSON.parse(m);
-        // Merge: keep stored prefs, append any new default modules not yet present
-        const ids = new Set(stored.map((x) => x.id));
-        const merged = [...stored, ...DEFAULT_MODULES.filter((d) => !ids.has(d.id))];
-        setModules(merged);
-        if (merged.length !== stored.length) {
-          localStorage.setItem(MODULES_KEY, JSON.stringify(merged));
-        }
-      }
-      const s = localStorage.getItem(SETTINGS_KEY);
-      if (s) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(s) });
     } catch {
       /* ignore */
     }
-    setReady(true);
-  }, []);
+    void Promise.all([fetchModules(), fetchSettings()]).finally(() => setReady(true));
+  }, [fetchModules, fetchSettings]);
 
-  const persistModules = (next: StoredModule[]) => {
-    setModules(next);
-    localStorage.setItem(MODULES_KEY, JSON.stringify(next));
-  };
-
-  const persistSettings = (next: AppSettings) => {
-    setSettings(next);
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
-  };
+  // Refetch when tab regains focus so operators see admin changes promptly.
+  useEffect(() => {
+    const onFocus = () => { void fetchModules(); void fetchSettings(); };
+    const onVis = () => { if (document.visibilityState === "visible") onFocus(); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
+    const t = window.setInterval(onFocus, 30_000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+      window.clearInterval(t);
+    };
+  }, [fetchModules, fetchSettings]);
 
   const value: AuthCtx = {
     ready,
@@ -137,22 +163,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       localStorage.removeItem(AUTH_KEY);
     },
-    addModule: (m) => {
+    addModule: async (m) => {
       if (modules.some((x) => x.id === m.id)) return;
-      persistModules([...modules, { ...m, custom: true }]);
+      const sort_order = modules.length;
+      await upsertModule({ data: { ...m, custom: true, sort_order } });
+      await fetchModules();
     },
-    updateModule: (id, patch) => {
-      persistModules(modules.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+    updateModule: async (id, patch) => {
+      await patchModule({ data: { id, ...patch } });
+      await fetchModules();
     },
-    removeModule: (id) => {
-      if (!modules.some((m) => m.id === id)) return;
-      persistModules(modules.filter((m) => m.id !== id));
+    removeModule: async (id) => {
+      await deleteModule({ data: { id } });
+      await fetchModules();
     },
-    toggleModule: (id, enabled) => {
-      persistModules(modules.map((m) => (m.id === id ? { ...m, enabled } : m)));
+    toggleModule: async (id, enabled) => {
+      await patchModule({ data: { id, enabled } });
+      setModules((prev) => prev.map((m) => (m.id === id ? { ...m, enabled } : m)));
     },
-    resetModules: () => persistModules(DEFAULT_MODULES),
-    updateSettings: (patch) => persistSettings({ ...settings, ...patch }),
+    resetModules: async () => {
+      await resetModulesAll({ data: { modules: DEFAULT_MODULES_FULL } });
+      await fetchModules();
+    },
+    updateSettings: async (patch) => {
+      await updateAppSettings({ data: patch });
+      await fetchSettings();
+    },
+    refreshModules: fetchModules,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -171,3 +208,4 @@ export function storedToFeature(m: StoredModule): Feature {
     icon: iconFor(m.iconKey),
   };
 }
+
