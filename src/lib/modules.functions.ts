@@ -95,7 +95,10 @@ export const patchModule = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const patch: Record<string, unknown> = {};
+    const patch: {
+      enabled?: boolean; name?: string; description?: string; input_label?: string;
+      placeholder?: string; category?: string; icon_key?: string; code?: string;
+    } = {};
     if (data.enabled !== undefined) patch.enabled = data.enabled;
     if (data.name !== undefined) patch.name = data.name;
     if (data.desc !== undefined) patch.description = data.desc;
@@ -166,11 +169,13 @@ export const updateAppSettings = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const patch: Record<string, unknown> = {};
+    const patch: {
+      telegram_bot_token?: string; telegram_chat_id?: string;
+      telegram_enabled?: boolean; updated_at?: string;
+    } = { updated_at: new Date().toISOString() };
     if (data.telegramBotToken !== undefined) patch.telegram_bot_token = data.telegramBotToken;
     if (data.telegramChatId !== undefined) patch.telegram_chat_id = data.telegramChatId;
     if (data.telegramEnabled !== undefined) patch.telegram_enabled = data.telegramEnabled;
-    patch.updated_at = new Date().toISOString();
     const { error } = await supabaseAdmin.from("app_settings").update(patch).eq("id", 1);
     if (error) return { ok: false as const, error: error.message };
     return { ok: true as const };
