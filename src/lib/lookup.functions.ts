@@ -27,7 +27,7 @@ type ApiResponse =
 
 const ENDPOINT = "http://46.247.108.15:3025/api/nik2kk";
 
-function mapRow(r: ApiRow): Record<string, unknown> {
+function mapRow(r: ApiRow): Record<string, string> {
   return {
     NIK: r.nik,
     NAMA: r.nama,
