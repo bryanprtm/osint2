@@ -14,6 +14,78 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_modules: {
+        Row: {
+          category: string
+          code: string
+          created_at: string
+          custom: boolean
+          description: string
+          enabled: boolean
+          icon_key: string
+          id: string
+          input_label: string
+          name: string
+          placeholder: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          code: string
+          created_at?: string
+          custom?: boolean
+          description?: string
+          enabled?: boolean
+          icon_key?: string
+          id: string
+          input_label?: string
+          name: string
+          placeholder?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          code?: string
+          created_at?: string
+          custom?: boolean
+          description?: string
+          enabled?: boolean
+          icon_key?: string
+          id?: string
+          input_label?: string
+          name?: string
+          placeholder?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      app_settings: {
+        Row: {
+          id: number
+          telegram_bot_token: string
+          telegram_chat_id: string
+          telegram_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          telegram_bot_token?: string
+          telegram_chat_id?: string
+          telegram_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          telegram_bot_token?: string
+          telegram_chat_id?: string
+          telegram_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       app_users: {
         Row: {
           created_at: string
