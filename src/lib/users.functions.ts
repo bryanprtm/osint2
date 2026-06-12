@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 
 export type AppUserRow = {
   id: string;
@@ -21,6 +22,9 @@ const passwordSchema = z.string().min(3, "Password minimal 3 karakter").max(128)
 const labelSchema = z.string().trim().min(1).max(60);
 const roleSchema = z.enum(["admin", "operator"]);
 
+const BCRYPT_ROUNDS = 10;
+const isBcryptHash = (s: string) => /^\$2[aby]\$/.test(s);
+
 // =============== LOGIN ===============
 export const loginCheck = createServerFn({ method: "POST" })
   .inputValidator((input: { username: string; password: string }) =>
@@ -37,7 +41,20 @@ export const loginCheck = createServerFn({ method: "POST" })
 
     if (error) return { ok: false as const, error: "Gagal terhubung ke server" };
     if (!row) return { ok: false as const, error: "Username atau password salah." };
-    if (row.password !== data.password) return { ok: false as const, error: "Username atau password salah." };
+
+    const stored = row.password as string;
+    let valid = false;
+    if (isBcryptHash(stored)) {
+      valid = await bcrypt.compare(data.password, stored);
+    } else {
+      // Legacy plaintext — verify then upgrade to bcrypt hash transparently.
+      valid = stored === data.password;
+      if (valid) {
+        const hashed = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
+        await supabaseAdmin.from("app_users").update({ password: hashed }).eq("id", row.id);
+      }
+    }
+    if (!valid) return { ok: false as const, error: "Username atau password salah." };
 
     return {
       ok: true as const,
@@ -83,9 +100,10 @@ export const createUser = createServerFn({ method: "POST" })
       .maybeSingle();
     if (existing) return { ok: false as const, error: "Username sudah dipakai." };
 
+    const hashed = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
     const { data: row, error } = await supabaseAdmin
       .from("app_users")
-      .insert({ username, password: data.password, role: data.role, label: data.label })
+      .insert({ username, password: hashed, role: data.role, label: data.label })
       .select("id, username, role, label, created_at, updated_at")
       .single();
     if (error) return { ok: false as const, error: error.message };
@@ -113,7 +131,7 @@ export const updateUser = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const patch: { password?: string; role?: "admin" | "operator"; label?: string } = {};
-    if (data.password !== undefined) patch.password = data.password;
+    if (data.password !== undefined) patch.password = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
     if (data.role !== undefined) patch.role = data.role;
     if (data.label !== undefined) patch.label = data.label;
     if (Object.keys(patch).length === 0) return { ok: false as const, error: "Tidak ada perubahan." };
