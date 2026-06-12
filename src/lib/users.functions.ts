@@ -112,7 +112,7 @@ export const updateUser = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const patch: Record<string, unknown> = {};
+    const patch: { password?: string; role?: "admin" | "operator"; label?: string } = {};
     if (data.password !== undefined) patch.password = data.password;
     if (data.role !== undefined) patch.role = data.role;
     if (data.label !== undefined) patch.label = data.label;
