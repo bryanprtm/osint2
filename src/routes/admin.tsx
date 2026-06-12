@@ -52,6 +52,89 @@ function AdminPage() {
   const [tgEnabled, setTgEnabled] = useState(settings.telegramEnabled);
   const [savedNote, setSavedNote] = useState("");
 
+  // --- Users state ---
+  const [users, setUsers] = useState<AppUserRow[]>([]);
+  const [usersLoading, setUsersLoading] = useState(true);
+  const [usersErr, setUsersErr] = useState("");
+  const [userForm, setUserForm] = useState<{
+    id: string | null; username: string; password: string; role: "admin" | "operator"; label: string;
+  }>({ id: null, username: "", password: "", role: "operator", label: "OPERATOR" });
+  const [userBusy, setUserBusy] = useState(false);
+  const [userNote, setUserNote] = useState("");
+
+  const refreshUsers = useCallback(async () => {
+    setUsersLoading(true);
+    setUsersErr("");
+    try {
+      const r = await listUsers();
+      setUsers(r.users);
+    } catch (e) {
+      setUsersErr(e instanceof Error ? e.message : "Gagal memuat pengguna");
+    } finally {
+      setUsersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void refreshUsers(); }, [refreshUsers]);
+
+  const resetUserForm = () =>
+    setUserForm({ id: null, username: "", password: "", role: "operator", label: "OPERATOR" });
+
+  const submitUser = async () => {
+    setUserBusy(true);
+    setUsersErr("");
+    setUserNote("");
+    try {
+      if (userForm.id) {
+        const patch: { id: string; password?: string; role?: "admin" | "operator"; label?: string } = {
+          id: userForm.id, role: userForm.role, label: userForm.label.trim() || "OPERATOR",
+        };
+        if (userForm.password.trim()) patch.password = userForm.password;
+        const r = await updateUser({ data: patch });
+        if (!r.ok) { setUsersErr(r.error); return; }
+        setUserNote(`Pengguna "${r.user.username}" diperbarui.`);
+      } else {
+        const r = await createUser({
+          data: {
+            username: userForm.username.trim().toLowerCase(),
+            password: userForm.password,
+            role: userForm.role,
+            label: userForm.label.trim() || (userForm.role === "admin" ? "ADMINISTRATOR" : "OPERATOR"),
+          },
+        });
+        if (!r.ok) { setUsersErr(r.error); return; }
+        setUserNote(`Pengguna "${r.user.username}" ditambahkan.`);
+      }
+      resetUserForm();
+      await refreshUsers();
+      setTimeout(() => setUserNote(""), 2500);
+    } catch (e) {
+      setUsersErr(e instanceof Error ? e.message : "Operasi gagal");
+    } finally {
+      setUserBusy(false);
+    }
+  };
+
+  const editUser = (u: AppUserRow) => {
+    setUserForm({ id: u.id, username: u.username, password: "", role: u.role, label: u.label });
+  };
+
+  const removeUserAction = async (u: AppUserRow) => {
+    if (!confirm(`Hapus pengguna "${u.username}"? Tindakan ini tidak bisa dibatalkan.`)) return;
+    setUserBusy(true);
+    setUsersErr("");
+    try {
+      const r = await deleteUser({ data: { id: u.id } });
+      if (!r.ok) { setUsersErr(r.error); return; }
+      if (userForm.id === u.id) resetUserForm();
+      await refreshUsers();
+      setUserNote(`Pengguna "${u.username}" dihapus.`);
+      setTimeout(() => setUserNote(""), 2500);
+    } finally {
+      setUserBusy(false);
+    }
+  };
+
   useEffect(() => {
     if (!ready) return;
     if (!user) navigate({ to: "/login" });
