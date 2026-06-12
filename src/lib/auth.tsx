@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { loginCheck } from "@/lib/users.functions";
 import {
   IdCard, Users, User, HeartPulse, Car, Hash, Binary, Phone,
   Camera, ScanFace, Radio, Satellite, Newspaper, Database,
@@ -11,12 +12,7 @@ import {
 import { FEATURES, type Feature } from "@/lib/osint-data";
 
 export type Role = "admin" | "operator";
-export type AuthUser = { username: string; role: Role; label: string };
-
-const CREDENTIALS: Record<string, { password: string; user: AuthUser }> = {
-  admin: { password: "admin", user: { username: "admin", role: "admin", label: "ADMINISTRATOR" } },
-  user:  { password: "user123", user: { username: "user", role: "operator", label: "OPERATOR" } },
-};
+export type AuthUser = { id?: string; username: string; role: Role; label: string };
 
 const AUTH_KEY = "jcd_osint_auth";
 const MODULES_KEY = "jcd_osint_modules";
@@ -74,7 +70,7 @@ type AuthCtx = {
   user: AuthUser | null;
   modules: StoredModule[];
   settings: AppSettings;
-  login: (u: string, p: string) => { ok: boolean; error?: string };
+  login: (u: string, p: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
   addModule: (m: Omit<StoredModule, "custom">) => void;
   updateModule: (id: string, patch: Partial<StoredModule>) => void;
@@ -130,11 +126,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     modules,
     settings,
-    login: (u, p) => {
-      const rec = CREDENTIALS[u.trim().toLowerCase()];
-      if (!rec || rec.password !== p) return { ok: false, error: "Username atau password salah." };
-      setUser(rec.user);
-      localStorage.setItem(AUTH_KEY, JSON.stringify(rec.user));
+    login: async (u, p) => {
+      const r = await loginCheck({ data: { username: u, password: p } });
+      if (!r.ok) return { ok: false, error: r.error };
+      setUser(r.user);
+      localStorage.setItem(AUTH_KEY, JSON.stringify(r.user));
       return { ok: true };
     },
     logout: () => {

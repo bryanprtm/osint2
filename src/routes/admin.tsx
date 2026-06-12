@@ -1,11 +1,13 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth, ICON_OPTIONS, iconFor, type StoredModule } from "@/lib/auth";
 import { Sidebar } from "@/components/osint/Sidebar";
 import { StatusBar } from "@/components/osint/StatusBar";
 import {
   Plus, Trash2, Pencil, Eye, EyeOff, Send, Save, ArrowLeft, RotateCcw, ShieldCheck, Check, X,
+  UserPlus, Users as UsersIcon, KeyRound, Loader2,
 } from "lucide-react";
+import { listUsers, createUser, updateUser, deleteUser, type AppUserRow } from "@/lib/users.functions";
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
@@ -49,6 +51,89 @@ function AdminPage() {
   const [tgChat, setTgChat] = useState(settings.telegramChatId);
   const [tgEnabled, setTgEnabled] = useState(settings.telegramEnabled);
   const [savedNote, setSavedNote] = useState("");
+
+  // --- Users state ---
+  const [users, setUsers] = useState<AppUserRow[]>([]);
+  const [usersLoading, setUsersLoading] = useState(true);
+  const [usersErr, setUsersErr] = useState("");
+  const [userForm, setUserForm] = useState<{
+    id: string | null; username: string; password: string; role: "admin" | "operator"; label: string;
+  }>({ id: null, username: "", password: "", role: "operator", label: "OPERATOR" });
+  const [userBusy, setUserBusy] = useState(false);
+  const [userNote, setUserNote] = useState("");
+
+  const refreshUsers = useCallback(async () => {
+    setUsersLoading(true);
+    setUsersErr("");
+    try {
+      const r = await listUsers();
+      setUsers(r.users);
+    } catch (e) {
+      setUsersErr(e instanceof Error ? e.message : "Gagal memuat pengguna");
+    } finally {
+      setUsersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void refreshUsers(); }, [refreshUsers]);
+
+  const resetUserForm = () =>
+    setUserForm({ id: null, username: "", password: "", role: "operator", label: "OPERATOR" });
+
+  const submitUser = async () => {
+    setUserBusy(true);
+    setUsersErr("");
+    setUserNote("");
+    try {
+      if (userForm.id) {
+        const patch: { id: string; password?: string; role?: "admin" | "operator"; label?: string } = {
+          id: userForm.id, role: userForm.role, label: userForm.label.trim() || "OPERATOR",
+        };
+        if (userForm.password.trim()) patch.password = userForm.password;
+        const r = await updateUser({ data: patch });
+        if (!r.ok) { setUsersErr(r.error); return; }
+        setUserNote(`Pengguna "${r.user.username}" diperbarui.`);
+      } else {
+        const r = await createUser({
+          data: {
+            username: userForm.username.trim().toLowerCase(),
+            password: userForm.password,
+            role: userForm.role,
+            label: userForm.label.trim() || (userForm.role === "admin" ? "ADMINISTRATOR" : "OPERATOR"),
+          },
+        });
+        if (!r.ok) { setUsersErr(r.error); return; }
+        setUserNote(`Pengguna "${r.user.username}" ditambahkan.`);
+      }
+      resetUserForm();
+      await refreshUsers();
+      setTimeout(() => setUserNote(""), 2500);
+    } catch (e) {
+      setUsersErr(e instanceof Error ? e.message : "Operasi gagal");
+    } finally {
+      setUserBusy(false);
+    }
+  };
+
+  const editUser = (u: AppUserRow) => {
+    setUserForm({ id: u.id, username: u.username, password: "", role: u.role, label: u.label });
+  };
+
+  const removeUserAction = async (u: AppUserRow) => {
+    if (!confirm(`Hapus pengguna "${u.username}"? Tindakan ini tidak bisa dibatalkan.`)) return;
+    setUserBusy(true);
+    setUsersErr("");
+    try {
+      const r = await deleteUser({ data: { id: u.id } });
+      if (!r.ok) { setUsersErr(r.error); return; }
+      if (userForm.id === u.id) resetUserForm();
+      await refreshUsers();
+      setUserNote(`Pengguna "${u.username}" dihapus.`);
+      setTimeout(() => setUserNote(""), 2500);
+    } finally {
+      setUserBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!ready) return;
@@ -247,9 +332,126 @@ function AdminPage() {
               </div>
             </div>
 
+            {/* === USERS MANAGEMENT === */}
+            <h2 className="text-xs font-mono uppercase tracking-[0.3em] text-cyber pt-2">▸ Manajemen Pengguna</h2>
+            <div className="panel-frame corner-brackets rounded-sm p-4 space-y-3">
+              <div className="flex items-center gap-2 text-cyber pb-2 border-b border-border">
+                <UsersIcon className="w-4 h-4" />
+                <span className="text-xs font-mono uppercase tracking-[0.25em]">
+                  Akun ({users.length})
+                </span>
+                {usersLoading && <Loader2 className="w-3.5 h-3.5 animate-spin ml-auto" />}
+              </div>
+
+              {/* Form */}
+              <div className="space-y-2 pb-2 border-b border-border">
+                <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                  {userForm.id ? <><Pencil className="w-3 h-3" /> EDIT PENGGUNA</> : <><UserPlus className="w-3 h-3" /> TAMBAH PENGGUNA</>}
+                  {userForm.id && (
+                    <button onClick={resetUserForm} className="ml-auto text-muted-foreground hover:text-foreground" title="Batal edit">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <Field
+                  label="Username"
+                  value={userForm.username}
+                  onChange={(v) => setUserForm({ ...userForm, username: v })}
+                  placeholder="contoh: operator2"
+                  mono
+                  full
+                  disabled={!!userForm.id}
+                />
+                <Field
+                  label={userForm.id ? "Password (kosongkan jika tidak diubah)" : "Password"}
+                  value={userForm.password}
+                  onChange={(v) => setUserForm({ ...userForm, password: v })}
+                  placeholder="••••••••"
+                  mono
+                  full
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <SelectField
+                    label="Peran"
+                    value={userForm.role}
+                    options={["operator", "admin"]}
+                    onChange={(v) => setUserForm({
+                      ...userForm,
+                      role: v as "admin" | "operator",
+                      label: !userForm.label || userForm.label === "OPERATOR" || userForm.label === "ADMINISTRATOR"
+                        ? (v === "admin" ? "ADMINISTRATOR" : "OPERATOR")
+                        : userForm.label,
+                    })}
+                  />
+                  <Field
+                    label="Label"
+                    value={userForm.label}
+                    onChange={(v) => setUserForm({ ...userForm, label: v })}
+                    placeholder="OPERATOR"
+                  />
+                </div>
+                <button
+                  onClick={submitUser}
+                  disabled={userBusy || (!userForm.id && (!userForm.username.trim() || !userForm.password.trim())) || (!!userForm.id && userBusy)}
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-sm bg-cyber text-primary-foreground font-semibold tracking-wider text-xs glow-cyber hover:bg-cyber-glow uppercase disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {userBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : userForm.id ? <Save className="w-3.5 h-3.5" /> : <UserPlus className="w-3.5 h-3.5" />}
+                  {userForm.id ? "Simpan Perubahan" : "Tambah Pengguna"}
+                </button>
+
+                {usersErr && (
+                  <div className="flex items-center gap-2 text-[11px] text-destructive border border-destructive/30 bg-destructive/10 px-2 py-1.5 rounded-sm">
+                    <X className="w-3.5 h-3.5" /> {usersErr}
+                  </div>
+                )}
+                {userNote && (
+                  <div className="flex items-center gap-2 text-[11px] text-success border border-success/30 bg-success/10 px-2 py-1.5 rounded-sm">
+                    <Check className="w-3.5 h-3.5" /> {userNote}
+                  </div>
+                )}
+              </div>
+
+              {/* List */}
+              <div className="space-y-1.5 max-h-72 overflow-auto">
+                {users.length === 0 && !usersLoading && (
+                  <div className="text-[11px] font-mono text-muted-foreground text-center py-3">
+                    Belum ada pengguna.
+                  </div>
+                )}
+                {users.map((u) => (
+                  <div key={u.id} className={`flex items-center gap-2 px-2.5 py-2 rounded-sm border border-border/60 bg-input/20 ${userForm.id === u.id ? "border-cyber/60" : ""}`}>
+                    <div className={`p-1.5 rounded-sm ${u.role === "admin" ? "bg-cyber/15 text-cyber" : "bg-secondary text-muted-foreground"}`}>
+                      {u.role === "admin" ? <ShieldCheck className="w-3.5 h-3.5" /> : <UsersIcon className="w-3.5 h-3.5" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-mono truncate">
+                        {u.username}
+                        {user?.username === u.username && (
+                          <span className="ml-1.5 text-[9px] font-mono px-1 py-0.5 rounded-sm bg-success/15 text-success">YOU</span>
+                        )}
+                      </div>
+                      <div className="text-[10px] font-mono text-muted-foreground truncate">
+                        {u.role.toUpperCase()} · {u.label}
+                      </div>
+                    </div>
+                    <IconBtn title="Edit / reset password" onClick={() => editUser(u)}>
+                      <KeyRound className="w-4 h-4" />
+                    </IconBtn>
+                    <IconBtn title="Hapus" onClick={() => removeUserAction(u)}>
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </IconBtn>
+                  </div>
+                ))}
+              </div>
+
+              <div className="text-[10px] font-mono text-muted-foreground border-t border-border pt-2 leading-relaxed">
+                Akun login disimpan di Lovable Cloud. Password tidak pernah dikirim ke browser; perubahan hanya bisa lewat panel ini.
+              </div>
+            </div>
+
             <div className="panel-frame rounded-sm p-4 text-[11px] font-mono text-muted-foreground space-y-1">
               <div className="text-cyber text-[10px] tracking-[0.3em]">▸ HAK AKSES</div>
-              <div><span className="text-foreground">ADMIN</span> · CRUD modul, kelola Telegram</div>
+              <div><span className="text-foreground">ADMIN</span> · CRUD modul, Telegram, kelola pengguna</div>
               <div><span className="text-foreground">OPERATOR</span> · hanya modul yang ditampilkan</div>
             </div>
           </section>

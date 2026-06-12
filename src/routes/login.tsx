@@ -21,16 +21,19 @@ function LoginPage() {
     if (ready && user) navigate({ to: "/" });
   }, [ready, user, navigate]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-    setTimeout(() => {
-      const r = login(username, password);
-      setLoading(false);
+    try {
+      const r = await login(username, password);
       if (!r.ok) setError(r.error ?? "Login gagal");
       else navigate({ to: "/" });
-    }, 500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login gagal");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
