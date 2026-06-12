@@ -58,7 +58,7 @@ export const lookupNik2KK = createServerFn({ method: "POST" })
     }
     return { kind: input.kind as Kind, query: input.query.trim() };
   })
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<{ ok: boolean; message: string; kk?: string; rows: Record<string, unknown>[] }> => {
     const { kind, query } = data;
 
     // API only accepts NIK or KK number in the `nik` param.
