@@ -67,7 +67,7 @@ export const lookupNik2KK = createServerFn({ method: "POST" })
         ok: false,
         message:
           "Endpoint sumber hanya mendukung pencarian via NIK atau No. KK. Silakan gunakan modul CEK NIK / CEK KK.",
-        rows: [] as Record<string, unknown>[],
+        rows: [],
       };
     }
 
