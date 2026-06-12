@@ -59,10 +59,40 @@ function Dashboard() {
 
   if (!ready || !user) return null;
 
-  const handleSubmit = (q: string) => {
+  const lookup = useServerFn(lookupNik2KK);
+
+  const handleSubmit = async (q: string) => {
     if (!feature) return;
     setLoading(true);
     setResult(null);
+
+    if (feature.id === "nik" || feature.id === "kk" || feature.id === "nama") {
+      const kind = feature.id as "nik" | "kk" | "nama";
+      try {
+        const res = await lookup({ data: { kind, query: q } });
+        setResult({
+          status: res.ok,
+          query: q,
+          feature: feature.id,
+          timestamp: new Date().toISOString(),
+          data: res.ok
+            ? res.rows
+            : [{ STATUS: "GAGAL", PESAN: res.message, QUERY: q }],
+        });
+      } catch (e) {
+        setResult({
+          status: false,
+          query: q,
+          feature: feature.id,
+          timestamp: new Date().toISOString(),
+          data: [{ STATUS: "ERROR", PESAN: (e as Error).message, QUERY: q }],
+        });
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     setTimeout(() => {
       setResult(generateMockResult(feature.id, q));
       setLoading(false);
