@@ -14,7 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      wa_lookups: {
+        Row: {
+          command_sent: string
+          created_at: string
+          error: string | null
+          id: string
+          module_id: string
+          query: string
+          responded_at: string | null
+          response_text: string | null
+          status: string
+          target_number: string
+        }
+        Insert: {
+          command_sent: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          module_id: string
+          query: string
+          responded_at?: string | null
+          response_text?: string | null
+          status?: string
+          target_number: string
+        }
+        Update: {
+          command_sent?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          module_id?: string
+          query?: string
+          responded_at?: string | null
+          response_text?: string | null
+          status?: string
+          target_number?: string
+        }
+        Relationships: []
+      }
+      wa_settings: {
+        Row: {
+          bot_number_kk: string
+          bot_number_nik: string
+          command_kk: string
+          command_nik: string
+          enabled: boolean
+          id: number
+          response_timeout_sec: number
+          updated_at: string
+          wablas_endpoint: string
+        }
+        Insert: {
+          bot_number_kk?: string
+          bot_number_nik?: string
+          command_kk?: string
+          command_nik?: string
+          enabled?: boolean
+          id?: number
+          response_timeout_sec?: number
+          updated_at?: string
+          wablas_endpoint?: string
+        }
+        Update: {
+          bot_number_kk?: string
+          bot_number_nik?: string
+          command_kk?: string
+          command_nik?: string
+          enabled?: boolean
+          id?: number
+          response_timeout_sec?: number
+          updated_at?: string
+          wablas_endpoint?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
