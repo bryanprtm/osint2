@@ -1,11 +1,13 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth, ICON_OPTIONS, iconFor, type StoredModule } from "@/lib/auth";
 import { Sidebar } from "@/components/osint/Sidebar";
 import { StatusBar } from "@/components/osint/StatusBar";
 import {
   Plus, Trash2, Pencil, Eye, EyeOff, Send, Save, ArrowLeft, RotateCcw, ShieldCheck, Check, X,
+  UserPlus, Users as UsersIcon, KeyRound, Loader2,
 } from "lucide-react";
+import { listUsers, createUser, updateUser, deleteUser, type AppUserRow } from "@/lib/users.functions";
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
