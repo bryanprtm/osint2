@@ -33,6 +33,7 @@ export const FEATURES: Feature[] = [
   { id: "fr", code: "OSI-011", name: "FACE RECOGNITION", desc: "Pencocokan wajah lintas database", input: "URL Foto / Upload", placeholder: "https://...", category: "Biometrik", icon: ScanFace },
   { id: "bts", code: "OSI-012", name: "ANALISA BTS", desc: "Estimasi lokasi via sinyal seluler & BTS", input: "Nomor HP", placeholder: "628xxxxxxxxx", category: "Geo & Sinyal", icon: Radio },
   { id: "pos", code: "OSI-013", name: "POS ALL OPERATOR", desc: "Pelacakan posisi lintas operator", input: "Nomor HP", placeholder: "628xxxxxxxxx", category: "Geo & Sinyal", icon: Satellite },
+  { id: "imei", code: "OSI-051", name: "CEK IMEI", desc: "Validasi & informasi perangkat via IMEI", input: "IMEI (14-15 digit)", placeholder: "356938xxxxxxxxx", category: "Telekomunikasi", icon: Cpu },
   { id: "media", code: "OSI-014", name: "MEDIA MONITORING", desc: "Monitoring berita & sosial media", input: "Keyword / Nama", placeholder: "kata kunci...", category: "Analitik", icon: Newspaper },
 
   // ── Cybersecurity / Vulnerability Scanning ─────────────────────────────────
