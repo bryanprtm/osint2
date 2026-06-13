@@ -68,14 +68,16 @@ function Dashboard() {
       const kind = feature.id as "nik" | "kk" | "nama";
       try {
         const res = await lookup({ data: { kind, query: q } });
+        const safe = res ?? { ok: false, message: "Tidak ada respons dari server", rows: [] };
+        const rows = Array.isArray(safe.rows) ? safe.rows : [];
         setResult({
-          status: res.ok,
+          status: !!safe.ok,
           query: q,
           feature: feature.id,
           timestamp: new Date().toISOString(),
-          data: res.ok
-            ? res.rows
-            : [{ STATUS: "GAGAL", PESAN: res.message, QUERY: q }],
+          data: safe.ok
+            ? rows
+            : [{ STATUS: "GAGAL", PESAN: safe.message ?? "Tidak ada data", QUERY: q }],
         });
       } catch (e) {
         setResult({
