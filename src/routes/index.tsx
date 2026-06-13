@@ -97,12 +97,16 @@ function Dashboard() {
     }, 850);
   };
 
+  if (!ready || !user) return null;
+
   const stats = [
     { label: "Modul Aktif", value: visibleFeatures.length, accent: "text-cyber" },
     { label: "Kategori", value: categories.length, accent: "text-success" },
     { label: "Sumber Data", value: "12", accent: "text-cyber" },
     { label: "Uptime", value: "99.98%", accent: "text-success" },
   ];
+
+
 
   return (
     <div className="min-h-screen flex w-full">
