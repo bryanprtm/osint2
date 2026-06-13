@@ -26,6 +26,52 @@ type ApiResponse =
   | { status: false; message: string };
 
 const ENDPOINT = "http://46.247.108.15:3025/api/nik2kk";
+// Cloudflare Workers (runtime Lovable Cloud) memblokir fetch langsung ke IP publik
+// dengan error code 1003. Karena penyedia API belum punya domain, kita rutekan
+// request melalui Jina Reader sebagai HTTP proxy (gratis, tanpa API key).
+const PROXY = "https://r.jina.ai/";
+
+async function fetchUpstream(url: string): Promise<string> {
+  // 1) Coba langsung dulu (jika environment mengizinkan akses IP).
+  try {
+    const direct = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "User-Agent": "Mozilla/5.0 (compatible; OsintLookup/1.0)",
+      },
+      signal: AbortSignal.timeout(12_000),
+    });
+    const txt = (await direct.text()).trim();
+    if (txt.startsWith("{") || txt.startsWith("[")) return txt;
+    // fallthrough ke proxy bila non-JSON (mis. error 1003)
+  } catch {
+    // fallthrough ke proxy
+  }
+
+  // 2) Fallback via Jina Reader proxy. Response berbentuk:
+  //    { code, status, data: { text: "<body asli>" , ... }, ... }
+  const res = await fetch(`${PROXY}${url}`, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      "X-Return-Format": "text",
+      "User-Agent": "Mozilla/5.0 (compatible; OsintLookup/1.0)",
+    },
+    signal: AbortSignal.timeout(25_000),
+  });
+  const wrapper = (await res.text()).trim();
+  if (!wrapper) throw new Error("Proxy mengembalikan respon kosong");
+  let parsed: { data?: { text?: string } };
+  try {
+    parsed = JSON.parse(wrapper);
+  } catch {
+    throw new Error("Proxy mengembalikan format tidak valid");
+  }
+  const inner = (parsed?.data?.text ?? "").trim();
+  if (!inner) throw new Error("Proxy tidak mengembalikan isi data");
+  return inner;
+}
 
 function mapRow(r: ApiRow): Record<string, string> {
   return {
@@ -73,47 +119,16 @@ export const lookupNik2KK = createServerFn({ method: "POST" })
 
     const url = `${ENDPOINT}?nik=${encodeURIComponent(query)}`;
     let json: ApiResponse;
-    let rawText = "";
     try {
-      const res = await fetch(url, {
-        method: "GET",
-        headers: {
-          Accept: "application/json, text/plain, */*",
-          "User-Agent": "Mozilla/5.0 (compatible; OsintLookup/1.0)",
-        },
-        signal: AbortSignal.timeout(25_000),
-      });
-      rawText = await res.text();
-      // Detect Cloudflare / upstream non-JSON error pages (e.g. "error code: 1003").
-      const trimmed = rawText.trim();
-      if (!trimmed) {
-        return { ok: false, message: "Server data mengembalikan respon kosong. Coba lagi sebentar.", rows: [] };
-      }
+      const trimmed = (await fetchUpstream(url)).trim();
       if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
-        const m = trimmed.match(/error code:\s*(\d+)/i);
-        if (m) {
-          const code = m[1];
-          const hint =
-            code === "1003"
-              ? "Akses langsung via IP diblokir oleh jaringan upstream (Cloudflare 1003). Hubungi penyedia API untuk membuka akses atau gunakan domain resmi."
-              : `Upstream mengembalikan error code ${code}.`;
-          return { ok: false, message: hint, rows: [] };
-        }
         return {
           ok: false,
-          message: `Server data tidak mengembalikan JSON (HTTP ${res.status}). Coba lagi nanti.`,
+          message: "Server data tidak mengembalikan JSON yang valid.",
           rows: [],
         };
       }
-      try {
-        json = JSON.parse(trimmed) as ApiResponse;
-      } catch {
-        return {
-          ok: false,
-          message: "Format respon server data tidak valid (JSON gagal di-parse).",
-          rows: [],
-        };
-      }
+      json = JSON.parse(trimmed) as ApiResponse;
     } catch (e) {
       const msg = (e as Error).message || String(e);
       return {
