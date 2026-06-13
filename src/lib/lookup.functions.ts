@@ -79,7 +79,7 @@ async function fetchUpstream(url: string): Promise<string> {
         Accept: "application/json, text/plain, */*",
         "User-Agent": "Mozilla/5.0 (compatible; OsintLookup/1.0)",
       },
-      signal: AbortSignal.timeout(12_000),
+      signal: AbortSignal.timeout(45_000),
     });
     const txt = extractJsonPayload(await direct.text());
     if (txt) return txt;
