@@ -26,6 +26,52 @@ type ApiResponse =
   | { status: false; message: string };
 
 const ENDPOINT = "http://46.247.108.15:3025/api/nik2kk";
+// Cloudflare Workers (runtime Lovable Cloud) memblokir fetch langsung ke IP publik
+// dengan error code 1003. Karena penyedia API belum punya domain, kita rutekan
+// request melalui Jina Reader sebagai HTTP proxy (gratis, tanpa API key).
+const PROXY = "https://r.jina.ai/";
+
+async function fetchUpstream(url: string): Promise<string> {
+  // 1) Coba langsung dulu (jika environment mengizinkan akses IP).
+  try {
+    const direct = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "User-Agent": "Mozilla/5.0 (compatible; OsintLookup/1.0)",
+      },
+      signal: AbortSignal.timeout(12_000),
+    });
+    const txt = (await direct.text()).trim();
+    if (txt.startsWith("{") || txt.startsWith("[")) return txt;
+    // fallthrough ke proxy bila non-JSON (mis. error 1003)
+  } catch {
+    // fallthrough ke proxy
+  }
+
+  // 2) Fallback via Jina Reader proxy. Response berbentuk:
+  //    { code, status, data: { text: "<body asli>" , ... }, ... }
+  const res = await fetch(`${PROXY}${url}`, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      "X-Return-Format": "text",
+      "User-Agent": "Mozilla/5.0 (compatible; OsintLookup/1.0)",
+    },
+    signal: AbortSignal.timeout(25_000),
+  });
+  const wrapper = (await res.text()).trim();
+  if (!wrapper) throw new Error("Proxy mengembalikan respon kosong");
+  let parsed: { data?: { text?: string } };
+  try {
+    parsed = JSON.parse(wrapper);
+  } catch {
+    throw new Error("Proxy mengembalikan format tidak valid");
+  }
+  const inner = (parsed?.data?.text ?? "").trim();
+  if (!inner) throw new Error("Proxy tidak mengembalikan isi data");
+  return inner;
+}
 
 function mapRow(r: ApiRow): Record<string, string> {
   return {
