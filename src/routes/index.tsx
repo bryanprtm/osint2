@@ -46,6 +46,8 @@ function Dashboard() {
   const [result, setResult] = useState<OsintResult | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const lookup = useServerFn(lookupNik2KK);
+
   useEffect(() => {
     if (ready && !user) navigate({ to: "/login" });
   }, [ready, user, navigate]);
@@ -56,10 +58,6 @@ function Dashboard() {
       setFeature(filteredFeatures[0] ?? null);
     }
   }, [filteredFeatures, feature]);
-
-  if (!ready || !user) return null;
-
-  const lookup = useServerFn(lookupNik2KK);
 
   const handleSubmit = async (q: string) => {
     if (!feature) return;
