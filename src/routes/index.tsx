@@ -47,6 +47,7 @@ function Dashboard() {
   const [loading, setLoading] = useState(false);
 
   const lookup = useServerFn(lookupNik2KK);
+  const lookupImeiFn = useServerFn(lookupImei);
 
   useEffect(() => {
     if (ready && !user) navigate({ to: "/login" });
