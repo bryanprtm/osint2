@@ -178,11 +178,21 @@ export const lookupNik2KK = createServerFn({ method: "POST" })
       };
     }
 
-    if (!json.status) {
-      return { ok: false, message: json.message || "Data tidak ditemukan", rows: [] };
+    if (!json || !json.status) {
+      const msg = (json && "message" in json && json.message) || "Data tidak ditemukan";
+      return { ok: false, message: msg, rows: [] };
     }
 
-    const rows = json.data.map(mapRow);
+    const dataArr = Array.isArray(json.data) ? json.data : [];
+    if (dataArr.length === 0) {
+      return {
+        ok: false,
+        message: "Data tidak ditemukan untuk query tersebut.",
+        kk: json.kk,
+        rows: [],
+      };
+    }
+    const rows = dataArr.map(mapRow);
     // For CEK NIK, prioritize the exact NIK match at the top.
     if (kind === "nik") {
       const exact = rows.filter((r) => r.NIK === query);
