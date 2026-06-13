@@ -31,6 +31,45 @@ const ENDPOINT = "http://46.247.108.15:3025/api/nik2kk";
 // request melalui Jina Reader sebagai HTTP proxy (gratis, tanpa API key).
 const PROXY = "https://r.jina.ai/";
 
+function extractJsonPayload(raw: string): string {
+  const text = raw.trim();
+  if (!text) return "";
+
+  if (text.startsWith("{") || text.startsWith("[")) {
+    return text;
+  }
+
+  try {
+    const parsed = JSON.parse(text) as { data?: { text?: string } };
+    const inner = parsed?.data?.text?.trim();
+    if (inner) return extractJsonPayload(inner);
+  } catch {
+    // ignore: lanjut ke format proxy lain
+  }
+
+  const markdownMatch = text.match(/Markdown Content:\s*([\s\S]*)$/i);
+  if (markdownMatch?.[1]) {
+    const cleaned = markdownMatch[1]
+      .trim()
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/, "")
+      .trim();
+    if (cleaned.startsWith("{") || cleaned.startsWith("[")) {
+      return cleaned;
+    }
+  }
+
+  const firstJsonIndex = Math.max(text.indexOf("{"), text.indexOf("["));
+  if (firstJsonIndex >= 0) {
+    const candidate = text.slice(firstJsonIndex).trim();
+    if (candidate.startsWith("{") || candidate.startsWith("[")) {
+      return candidate;
+    }
+  }
+
+  return "";
+}
+
 async function fetchUpstream(url: string): Promise<string> {
   // 1) Coba langsung dulu (jika environment mengizinkan akses IP).
   try {
@@ -42,35 +81,36 @@ async function fetchUpstream(url: string): Promise<string> {
       },
       signal: AbortSignal.timeout(12_000),
     });
-    const txt = (await direct.text()).trim();
-    if (txt.startsWith("{") || txt.startsWith("[")) return txt;
+    const txt = extractJsonPayload(await direct.text());
+    if (txt) return txt;
     // fallthrough ke proxy bila non-JSON (mis. error 1003)
   } catch {
     // fallthrough ke proxy
   }
 
-  // 2) Fallback via Jina Reader proxy. Response berbentuk:
-  //    { code, status, data: { text: "<body asli>" , ... }, ... }
-  const res = await fetch(`${PROXY}${url}`, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      "X-Return-Format": "text",
-      "User-Agent": "Mozilla/5.0 (compatible; OsintLookup/1.0)",
-    },
-    signal: AbortSignal.timeout(25_000),
-  });
-  const wrapper = (await res.text()).trim();
-  if (!wrapper) throw new Error("Proxy mengembalikan respon kosong");
-  let parsed: { data?: { text?: string } };
-  try {
-    parsed = JSON.parse(wrapper);
-  } catch {
-    throw new Error("Proxy mengembalikan format tidak valid");
+  // 2) Fallback via Jina Reader proxy. Di beberapa environment, Jina bisa
+  //    mengembalikan JSON wrapper ATAU markdown/plain text, jadi keduanya didukung.
+  const proxyCandidates = [`${PROXY}${url}`, `${PROXY}http://${url.replace(/^https?:\/\//, "")}`];
+
+  for (const proxyUrl of proxyCandidates) {
+    try {
+      const res = await fetch(proxyUrl, {
+        method: "GET",
+        headers: {
+          Accept: "application/json, text/plain, */*",
+          "X-Return-Format": "text",
+          "User-Agent": "Mozilla/5.0 (compatible; OsintLookup/1.0)",
+        },
+        signal: AbortSignal.timeout(25_000),
+      });
+      const extracted = extractJsonPayload(await res.text());
+      if (extracted) return extracted;
+    } catch {
+      // coba kandidat proxy berikutnya
+    }
   }
-  const inner = (parsed?.data?.text ?? "").trim();
-  if (!inner) throw new Error("Proxy tidak mengembalikan isi data");
-  return inner;
+
+  throw new Error("Proxy tidak mengembalikan isi data");
 }
 
 function mapRow(r: ApiRow): Record<string, string> {
