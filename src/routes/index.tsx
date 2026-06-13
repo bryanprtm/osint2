@@ -7,7 +7,7 @@ import { QueryConsole } from "@/components/osint/QueryConsole";
 import { ResultsPanel } from "@/components/osint/ResultsPanel";
 import { generateMockResult, type Feature, type OsintResult } from "@/lib/osint-data";
 import { useAuth, storedToFeature } from "@/lib/auth";
-import { lookupNik2KK } from "@/lib/lookup.functions";
+import { lookupNik2KK, lookupImei } from "@/lib/lookup.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { Info, LogOut, ShieldCheck, Send } from "lucide-react";
 
@@ -47,6 +47,7 @@ function Dashboard() {
   const [loading, setLoading] = useState(false);
 
   const lookup = useServerFn(lookupNik2KK);
+  const lookupImeiFn = useServerFn(lookupImei);
 
   useEffect(() => {
     if (ready && !user) navigate({ to: "/login" });
@@ -63,6 +64,34 @@ function Dashboard() {
     if (!feature) return;
     setLoading(true);
     setResult(null);
+
+    if (feature.id === "imei") {
+      try {
+        const res = await lookupImeiFn({ data: { query: q } });
+        const safe = res ?? { ok: false, message: "Tidak ada respons dari server", rows: [] };
+        const rows = Array.isArray(safe.rows) ? safe.rows : [];
+        setResult({
+          status: !!safe.ok,
+          query: q,
+          feature: feature.id,
+          timestamp: new Date().toISOString(),
+          data: safe.ok && rows.length > 0
+            ? rows
+            : [{ STATUS: safe.ok ? "OK" : "GAGAL", PESAN: safe.message ?? "Tidak ada data", QUERY: q, ...(rows[0] ?? {}) }],
+        });
+      } catch (e) {
+        setResult({
+          status: false,
+          query: q,
+          feature: feature.id,
+          timestamp: new Date().toISOString(),
+          data: [{ STATUS: "ERROR", PESAN: (e as Error).message, QUERY: q }],
+        });
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     if (feature.id === "nik" || feature.id === "kk" || feature.id === "nama") {
       const kind = feature.id as "nik" | "kk" | "nama";

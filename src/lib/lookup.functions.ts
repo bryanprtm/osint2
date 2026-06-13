@@ -26,6 +26,7 @@ type ApiResponse =
   | { status: false; message: string };
 
 const ENDPOINT = "http://46.247.108.15:3025/api/nik2kk";
+const IMEI_ENDPOINT = "http://46.247.108.15:3011/cekimei";
 // Cloudflare Workers (runtime Lovable Cloud) memblokir fetch langsung ke IP publik
 // dengan error code 1003. Karena penyedia API belum punya domain, kita rutekan
 // request melalui Jina Reader sebagai HTTP proxy (gratis, tanpa API key).
@@ -211,5 +212,52 @@ export const lookupNik2KK = createServerFn({ method: "POST" })
       message: `Kartu Keluarga ${json.kk} — ${json.total_anggota} anggota`,
       kk: json.kk,
       rows,
+    };
+  });
+
+export const lookupImei = createServerFn({ method: "POST" })
+  .inputValidator((input: { query: string }) => {
+    if (!input || typeof input.query !== "string" || !input.query.trim()) {
+      throw new Error("IMEI wajib diisi");
+    }
+    return { query: input.query.trim() };
+  })
+  .handler(async ({ data }): Promise<{ ok: boolean; message: string; rows: Record<string, string>[] }> => {
+    const { query } = data;
+    const url = `${IMEI_ENDPOINT}?query=${encodeURIComponent(query)}`;
+
+    let json: Record<string, unknown>;
+    try {
+      const trimmed = (await fetchUpstream(url)).trim();
+      if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+        return { ok: false, message: "Server data tidak mengembalikan JSON yang valid.", rows: [] };
+      }
+      json = JSON.parse(trimmed) as Record<string, unknown>;
+    } catch (e) {
+      return { ok: false, message: `Gagal menghubungi server data: ${(e as Error).message || String(e)}`, rows: [] };
+    }
+
+    if (!json) {
+      return { ok: false, message: "Tidak ada respons dari server data.", rows: [] };
+    }
+
+    const status = String(json.status ?? "").toLowerCase();
+    const isError = status === "error" || status === "false" || json.status === false;
+
+    const row: Record<string, string> = {};
+    for (const [k, v] of Object.entries(json)) {
+      if (v === null || v === undefined) continue;
+      row[k.toUpperCase()] = typeof v === "object" ? JSON.stringify(v) : String(v);
+    }
+
+    if (isError) {
+      const msg = (json.result as string) || (json.message as string) || "IMEI tidak valid / data tidak ditemukan.";
+      return { ok: false, message: msg, rows: Object.keys(row).length ? [row] : [] };
+    }
+
+    return {
+      ok: true,
+      message: `Data IMEI ${query} ditemukan`,
+      rows: [row],
     };
   });
