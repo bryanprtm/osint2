@@ -302,7 +302,15 @@ function deepDecrypt(node: unknown): unknown {
   return node;
 }
 
-async function fetchBpjsOnce(url: string, init?: RequestInit): Promise<{ contentType: string; bytes: Uint8Array; text: string; setCookie: string | null } | null> {
+type BpjsRawResponse = {
+  status: number;
+  contentType: string;
+  bytes: Uint8Array;
+  text: string;
+  setCookie: string | null;
+};
+
+async function fetchBpjsOnce(url: string, init?: RequestInit): Promise<BpjsRawResponse | null> {
   try {
     const r = await fetch(url, {
       ...init,
@@ -313,9 +321,9 @@ async function fetchBpjsOnce(url: string, init?: RequestInit): Promise<{ content
       },
       signal: AbortSignal.timeout(60_000),
     });
-    if (!r.ok && r.status >= 500) return null;
     const buf = new Uint8Array(await r.arrayBuffer());
     return {
+      status: r.status,
       contentType: r.headers.get("content-type") || "",
       bytes: buf,
       text: new TextDecoder().decode(buf),
@@ -326,13 +334,14 @@ async function fetchBpjsOnce(url: string, init?: RequestInit): Promise<{ content
   }
 }
 
-function unwrapAllOriginsGet(raw: { contentType: string; bytes: Uint8Array; text: string; setCookie: string | null }): typeof raw {
+function unwrapAllOriginsGet(raw: BpjsRawResponse): BpjsRawResponse {
   // allorigins /get?url= membungkus respons asli dalam {contents, status:{content_type,...}}
   try {
-    const j = JSON.parse(raw.text) as { contents?: string; status?: { content_type?: string } };
+    const j = JSON.parse(raw.text) as { contents?: string; status?: { content_type?: string; http_code?: number } };
     if (typeof j.contents === "string") {
       const text = j.contents;
       return {
+        status: j.status?.http_code ?? raw.status,
         contentType: j.status?.content_type || "text/plain",
         bytes: new TextEncoder().encode(text),
         text,
@@ -345,10 +354,22 @@ function unwrapAllOriginsGet(raw: { contentType: string; bytes: Uint8Array; text
   return raw;
 }
 
-async function fetchBpjsRaw(url: string, init?: RequestInit): Promise<{ contentType: string; bytes: Uint8Array; text: string; setCookie: string | null }> {
+function isUsableBpjsResponse(raw: BpjsRawResponse | null): raw is BpjsRawResponse {
+  if (!raw || raw.bytes.length === 0) return false;
+  if (raw.status >= 400) return false;
+
+  const head = raw.text.slice(0, 400).toLowerCase();
+  if (/error code: ?1003/i.test(head)) return false;
+  if (/server-side requests are not allowed on your plan/i.test(head)) return false;
+  if (/bad request, valid format/i.test(head)) return false;
+
+  return true;
+}
+
+async function fetchBpjsRaw(url: string, init?: RequestInit): Promise<BpjsRawResponse> {
   // 1) direct (di CF Worker bisa berhasil untuk IP publik; mendukung POST)
   const direct = await fetchBpjsOnce(url, init);
-  if (direct && direct.bytes.length > 0 && !/error code: ?1003/i.test(direct.text)) {
+  if (isUsableBpjsResponse(direct)) {
     return direct;
   }
 
@@ -371,10 +392,28 @@ async function fetchBpjsRaw(url: string, init?: RequestInit): Promise<{ contentT
   for (let i = 0; i < proxies.length; i++) {
     const purl = proxies[i];
     const r = await fetchBpjsOnce(purl, { headers: init?.headers });
-    if (r && r.bytes.length > 0 && !/error code: ?1003/i.test(r.text)) {
-      return i === 0 ? unwrapAllOriginsGet(r) : r;
+    const normalized = r ? (i === 0 ? unwrapAllOriginsGet(r) : r) : null;
+    if (isUsableBpjsResponse(normalized)) {
+      return normalized;
     }
   }
+
+  // 3) Fallback khusus GET via Jina Reader. Ini penting untuk endpoint captcha,
+  //    karena proxy lain sering balas 522 walau target aslinya masih hidup.
+  if (method === "GET") {
+    const [base, query = ""] = targetUrl.split("?");
+    const jinaCandidates = [
+      `${PROXY}${targetUrl}`,
+      query ? `${PROXY}${base}%3F${query.replace(/&/g, "%26").replace(/=/g, "%3D")}` : `${PROXY}${base}`,
+    ];
+    for (const purl of jinaCandidates) {
+      const r = await fetchBpjsOnce(purl, { headers: init?.headers });
+      if (isUsableBpjsResponse(r)) {
+        return r;
+      }
+    }
+  }
+
   throw new Error("Semua jalur koneksi gagal menjangkau server BPJS");
 }
 
