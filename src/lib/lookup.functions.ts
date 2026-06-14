@@ -334,7 +334,6 @@ async function fetchBpjsRaw(url: string, init?: RequestInit): Promise<{ contentT
   // 2) Proxy biner-safe yang meneruskan body apa adanya
   const proxies = [
     `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    `https://corsproxy.io/?${encodeURIComponent(url)}`,
     `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
   ];
   for (const purl of proxies) {
@@ -344,6 +343,39 @@ async function fetchBpjsRaw(url: string, init?: RequestInit): Promise<{ contentT
     }
   }
   throw new Error("Semua proxy gagal menjangkau server BPJS");
+}
+
+function extractBpjsJson(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) return trimmed;
+
+  const bodyMatch = trimmed.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  const candidate = (bodyMatch?.[1] ?? trimmed)
+    .replace(/^\s*<pre[^>]*>/i, "")
+    .replace(/<\/pre>\s*$/i, "")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .trim();
+
+  const firstBrace = candidate.indexOf("{");
+  const firstBracket = candidate.indexOf("[");
+  const start = [firstBrace, firstBracket].filter((n) => n >= 0).sort((a, b) => a - b)[0] ?? -1;
+  return start >= 0 ? candidate.slice(start).trim() : trimmed;
+}
+
+function detectBase64Mime(base64: string): string {
+  if (base64.startsWith("/9j/")) return "image/jpeg";
+  if (base64.startsWith("iVBOR")) return "image/png";
+  if (base64.startsWith("R0lGOD")) return "image/gif";
+  if (base64.startsWith("UklGR")) return "image/webp";
+  return "image/png";
+}
+
+function normalizeCaptchaDataUri(value: string): string {
+  const raw = value.trim();
+  const base64 = raw.replace(/^data:[^;]+;base64,/i, "");
+  const mime = detectBase64Mime(base64);
+  return `data:${mime};base64,${base64}`;
 }
 
 export const getBpjsCaptcha = createServerFn({ method: "GET" })
@@ -360,9 +392,10 @@ export const getBpjsCaptcha = createServerFn({ method: "GET" })
       });
 
       // Coba parse JSON dulu
-      if (res.text.trim().startsWith("{")) {
+      const extractedJson = extractBpjsJson(res.text);
+      if (extractedJson.startsWith("{")) {
         try {
-          const j = JSON.parse(res.text) as Record<string, unknown>;
+          const j = JSON.parse(extractedJson) as Record<string, unknown>;
           const captcha =
             (j.captcha as string) ||
             (j.captcha_base64 as string) ||
@@ -377,9 +410,7 @@ export const getBpjsCaptcha = createServerFn({ method: "GET" })
             (j.session as string) ||
             ownSession;
           if (captcha) {
-            const dataUri = captcha.startsWith("data:")
-              ? captcha
-              : `data:image/png;base64,${captcha.replace(/^data:.*;base64,/, "")}`;
+            const dataUri = normalizeCaptchaDataUri(captcha);
             return { ok: true, message: "OK", captcha: dataUri, sessionId };
           }
         } catch {
