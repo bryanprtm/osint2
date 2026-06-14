@@ -240,7 +240,11 @@ function Dashboard() {
           <section className="xl:col-span-5 space-y-4">
             {feature ? (
               <>
-                <QueryConsole feature={feature} onSubmit={handleSubmit} loading={loading} />
+                {feature.id === "bpjs" ? (
+                  <BpjsConsole feature={feature} onSubmit={handleBpjsSubmit} loading={loading} />
+                ) : (
+                  <QueryConsole feature={feature} onSubmit={handleSubmit} loading={loading} />
+                )}
                 <ResultsPanel result={result} loading={loading} />
               </>
             ) : (
