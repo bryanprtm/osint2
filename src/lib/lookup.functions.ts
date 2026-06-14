@@ -827,16 +827,49 @@ export const lookupGuru = createServerFn({ method: "POST" })
     const { query } = data;
     const url = `${GURU_ENDPOINT}?keyword=${encodeURIComponent(query)}`;
 
+    // SIMPKB endpoint adalah HTTP plain di port 1991. Worker bisa fetch langsung,
+    // sehingga tidak perlu lewat proxy publik (yang sering kena rate-limit).
+    async function fetchDirect(): Promise<string> {
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          Accept: "application/json, text/plain, */*",
+          "User-Agent": "Mozilla/5.0 (compatible; OsintLookup/1.0)",
+        },
+        signal: AbortSignal.timeout(30_000),
+      });
+      return (await res.text()).trim();
+    }
+
+    let trimmed = "";
+    let directErr = "";
+    try {
+      trimmed = await fetchDirect();
+    } catch (e) {
+      directErr = (e as Error).message || String(e);
+    }
+
+    // Jika direct gagal atau bukan JSON, baru fallback ke proxy
+    if (!trimmed || (!trimmed.startsWith("{") && !trimmed.startsWith("["))) {
+      try {
+        trimmed = (await fetchUpstream(url)).trim();
+      } catch (e) {
+        const msg = directErr || (e as Error).message || String(e);
+        return { ok: false, message: `Gagal menghubungi server SIMPKB: ${msg}`, rows: [] };
+      }
+    }
+
+    if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+      return { ok: false, message: "Server SIMPKB tidak mengembalikan JSON yang valid.", rows: [] };
+    }
+
     let json: Record<string, unknown> | unknown[];
     try {
-      const trimmed = (await fetchUpstream(url)).trim();
-      if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
-        return { ok: false, message: "Server SIMPKB tidak mengembalikan JSON yang valid.", rows: [] };
-      }
       json = JSON.parse(trimmed);
     } catch (e) {
-      return { ok: false, message: `Gagal menghubungi server SIMPKB: ${(e as Error).message || String(e)}`, rows: [] };
+      return { ok: false, message: `Gagal parsing JSON SIMPKB: ${(e as Error).message}`, rows: [] };
     }
+
 
     const obj = (Array.isArray(json) ? { data: json } : json) as Record<string, unknown>;
     const status = obj.status;
