@@ -40,17 +40,24 @@ function extractJsonPayload(raw: string): string {
   const text = raw.trim();
   if (!text) return "";
 
-  if (text.startsWith("{") || text.startsWith("[")) {
+  // Try to unwrap Jina Reader JSON wrapper first: { code, status, data: { text: "..." } }
+  if (text.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(text) as { data?: { text?: string } };
+      const inner = parsed?.data?.text?.trim();
+      if (inner && (inner.startsWith("{") || inner.startsWith("["))) {
+        return extractJsonPayload(inner);
+      }
+    } catch {
+      // bukan JSON valid, lanjut
+    }
     return text;
   }
 
-  try {
-    const parsed = JSON.parse(text) as { data?: { text?: string } };
-    const inner = parsed?.data?.text?.trim();
-    if (inner) return extractJsonPayload(inner);
-  } catch {
-    // ignore: lanjut ke format proxy lain
+  if (text.startsWith("[")) {
+    return text;
   }
+
 
   const markdownMatch = text.match(/Markdown Content:\s*([\s\S]*)$/i);
   if (markdownMatch?.[1]) {
