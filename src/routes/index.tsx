@@ -7,7 +7,7 @@ import { QueryConsole } from "@/components/osint/QueryConsole";
 import { ResultsPanel } from "@/components/osint/ResultsPanel";
 import { generateMockResult, type Feature, type OsintResult } from "@/lib/osint-data";
 import { useAuth, storedToFeature } from "@/lib/auth";
-import { lookupNik2KK, lookupImei, lookupBpjs, lookupNopol, lookupMahasiswa } from "@/lib/lookup.functions";
+import { lookupNik2KK, lookupImei, lookupBpjs, lookupNopol, lookupMahasiswa, lookupGuru } from "@/lib/lookup.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { BpjsConsole } from "@/components/osint/BpjsConsole";
 import { Info, LogOut, ShieldCheck, Send } from "lucide-react";
