@@ -100,8 +100,8 @@ function Dashboard() {
     setLoading(true);
     setResult(null);
 
-    if (feature.id === "imei" || feature.id === "nopol" || feature.id === "mahasiswa") {
-      const fn = feature.id === "imei" ? lookupImeiFn : feature.id === "nopol" ? lookupNopolFn : lookupMahasiswaFn;
+    if (feature.id === "imei" || feature.id === "nopol" || feature.id === "mahasiswa" || feature.id === "guru") {
+      const fn = feature.id === "imei" ? lookupImeiFn : feature.id === "nopol" ? lookupNopolFn : feature.id === "mahasiswa" ? lookupMahasiswaFn : lookupGuruFn;
       try {
         const res = await fn({ data: { query: q } });
         const safe = res ?? { ok: false, message: "Tidak ada respons dari server", rows: [] };
