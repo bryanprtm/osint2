@@ -5,7 +5,7 @@ import {
   Activity, Map, Calculator, PackageSearch, FileSearch, Mail, Cpu,
   FileDigit, Search, ScanLine, KeyRound, FileWarning, Link2, ShieldX,
   FileCode, FormInput, Code2, Flame, Swords, KeySquare, Unlock, Dices,
-  TerminalSquare, FileJson, ArrowLeftRight, type LucideIcon,
+  TerminalSquare, FileJson, ArrowLeftRight, GraduationCap, type LucideIcon,
 } from "lucide-react";
 
 export type Feature = {
