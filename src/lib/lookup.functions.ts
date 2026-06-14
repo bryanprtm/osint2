@@ -365,7 +365,10 @@ export const getBpjsCaptcha = createServerFn({ method: "GET" })
           const j = JSON.parse(res.text) as Record<string, unknown>;
           const captcha =
             (j.captcha as string) ||
+            (j.captcha_base64 as string) ||
+            (j.captchaBase64 as string) ||
             (j.image as string) ||
+            (j.img as string) ||
             (j.data as string) ||
             "";
           const sessionId =
