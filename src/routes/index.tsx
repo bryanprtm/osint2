@@ -7,8 +7,9 @@ import { QueryConsole } from "@/components/osint/QueryConsole";
 import { ResultsPanel } from "@/components/osint/ResultsPanel";
 import { generateMockResult, type Feature, type OsintResult } from "@/lib/osint-data";
 import { useAuth, storedToFeature } from "@/lib/auth";
-import { lookupNik2KK, lookupImei } from "@/lib/lookup.functions";
+import { lookupNik2KK, lookupImei, lookupBpjs } from "@/lib/lookup.functions";
 import { useServerFn } from "@tanstack/react-start";
+import { BpjsConsole } from "@/components/osint/BpjsConsole";
 import { Info, LogOut, ShieldCheck, Send } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -48,6 +49,37 @@ function Dashboard() {
 
   const lookup = useServerFn(lookupNik2KK);
   const lookupImeiFn = useServerFn(lookupImei);
+  const lookupBpjsFn = useServerFn(lookupBpjs);
+
+  const handleBpjsSubmit = async (payload: { nik: string; captcha: string; sessionId: string }) => {
+    if (!feature) return;
+    setLoading(true);
+    setResult(null);
+    try {
+      const res = await lookupBpjsFn({ data: payload });
+      const safe = res ?? { ok: false, message: "Tidak ada respons dari server", rows: [] };
+      const rows = Array.isArray(safe.rows) ? safe.rows : [];
+      setResult({
+        status: !!safe.ok,
+        query: payload.nik,
+        feature: feature.id,
+        timestamp: new Date().toISOString(),
+        data: safe.ok && rows.length > 0
+          ? rows
+          : [{ STATUS: safe.ok ? "OK" : "GAGAL", PESAN: safe.message ?? "Tidak ada data", QUERY: payload.nik }],
+      });
+    } catch (e) {
+      setResult({
+        status: false,
+        query: payload.nik,
+        feature: feature.id,
+        timestamp: new Date().toISOString(),
+        data: [{ STATUS: "ERROR", PESAN: (e as Error).message, QUERY: payload.nik }],
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (ready && !user) navigate({ to: "/login" });
@@ -208,7 +240,11 @@ function Dashboard() {
           <section className="xl:col-span-5 space-y-4">
             {feature ? (
               <>
-                <QueryConsole feature={feature} onSubmit={handleSubmit} loading={loading} />
+                {feature.id === "bpjs" ? (
+                  <BpjsConsole feature={feature} onSubmit={handleBpjsSubmit} loading={loading} />
+                ) : (
+                  <QueryConsole feature={feature} onSubmit={handleSubmit} loading={loading} />
+                )}
                 <ResultsPanel result={result} loading={loading} />
               </>
             ) : (

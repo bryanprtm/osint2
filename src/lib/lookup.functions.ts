@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { createDecipheriv } from "node:crypto";
 
 type Kind = "nik" | "kk" | "nama";
 
@@ -259,5 +260,199 @@ export const lookupImei = createServerFn({ method: "POST" })
       ok: true,
       message: `Data IMEI ${query} ditemukan`,
       rows: [row],
+    };
+  });
+
+// ─── BPJS SIPP ────────────────────────────────────────────────────────────────
+const BPJS_ENDPOINT = "http://46.247.108.15:4040/sipp";
+const BPJS_API_KEY = "kalcer1337";
+const BPJS_AES_KEY = Buffer.from("BPJSKesehatan201BPJSKesehatan201", "utf8");
+const BPJS_AES_IV = Buffer.from("*BpjsKesSipp@_!#", "utf8");
+
+function tryAesDecrypt(value: string): string | null {
+  try {
+    const buf = Buffer.from(value, "base64");
+    if (buf.length === 0 || buf.length % 16 !== 0) return null;
+    const d = createDecipheriv("aes-256-cbc", BPJS_AES_KEY, BPJS_AES_IV);
+    const out = Buffer.concat([d.update(buf), d.final()]);
+    return out.toString("utf8");
+  } catch {
+    return null;
+  }
+}
+
+function deepDecrypt(node: unknown): unknown {
+  if (typeof node === "string") {
+    const dec = tryAesDecrypt(node);
+    if (dec === null) return node;
+    try {
+      return deepDecrypt(JSON.parse(dec));
+    } catch {
+      return dec;
+    }
+  }
+  if (Array.isArray(node)) return node.map(deepDecrypt);
+  if (node && typeof node === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(node)) out[k] = deepDecrypt(v);
+    return out;
+  }
+  return node;
+}
+
+async function fetchBpjsRaw(url: string, init?: RequestInit): Promise<{ contentType: string; bytes: Uint8Array; text: string; setCookie: string | null }> {
+  const r = await fetch(url, {
+    ...init,
+    headers: {
+      Accept: "*/*",
+      "User-Agent": "Mozilla/5.0 (compatible; OsintLookup/1.0)",
+      ...(init?.headers ?? {}),
+    },
+    signal: AbortSignal.timeout(60_000),
+  });
+  const buf = new Uint8Array(await r.arrayBuffer());
+  return {
+    contentType: r.headers.get("content-type") || "",
+    bytes: buf,
+    text: new TextDecoder().decode(buf),
+    setCookie: r.headers.get("set-cookie"),
+  };
+}
+
+export const getBpjsCaptcha = createServerFn({ method: "GET" })
+  .handler(async (): Promise<{ ok: boolean; message: string; captcha?: string; sessionId?: string }> => {
+    const url = `${BPJS_ENDPOINT}?apikey=${BPJS_API_KEY}&action=captcha`;
+    try {
+      const res = await fetchBpjsRaw(url);
+
+      // Coba parse JSON dulu
+      if (res.text.trim().startsWith("{")) {
+        try {
+          const j = JSON.parse(res.text) as Record<string, unknown>;
+          const captcha =
+            (j.captcha as string) ||
+            (j.image as string) ||
+            (j.data as string) ||
+            "";
+          const sessionId =
+            (j.sessionId as string) ||
+            (j.session_id as string) ||
+            (j.session as string) ||
+            "";
+          if (captcha) {
+            const dataUri = captcha.startsWith("data:")
+              ? captcha
+              : `data:image/png;base64,${captcha.replace(/^data:.*;base64,/, "")}`;
+            return { ok: true, message: "OK", captcha: dataUri, sessionId };
+          }
+        } catch {
+          // bukan JSON valid, lanjut sebagai image
+        }
+      }
+
+      // Asumsikan respons biner gambar
+      if (res.contentType.startsWith("image/") || res.bytes.length > 0) {
+        const b64 = Buffer.from(res.bytes).toString("base64");
+        const mime = res.contentType.startsWith("image/") ? res.contentType : "image/png";
+        // Ambil sessionId dari Set-Cookie (PHPSESSID/JSESSIONID)
+        let sessionId = "";
+        if (res.setCookie) {
+          const m = res.setCookie.match(/(PHPSESSID|JSESSIONID|sessionId)=([^;]+)/i);
+          if (m) sessionId = m[2];
+        }
+        return { ok: true, message: "OK", captcha: `data:${mime};base64,${b64}`, sessionId };
+      }
+
+      return { ok: false, message: "Captcha tidak tersedia dari server BPJS." };
+    } catch (e) {
+      return { ok: false, message: `Gagal menghubungi server BPJS: ${(e as Error).message || String(e)}` };
+    }
+  });
+
+export const lookupBpjs = createServerFn({ method: "POST" })
+  .inputValidator((input: { nik: string; captcha: string; sessionId: string }) => {
+    if (!input || typeof input.nik !== "string" || !input.nik.trim()) throw new Error("NIK wajib diisi");
+    if (!input.captcha || !input.captcha.trim()) throw new Error("Captcha wajib diisi");
+    return {
+      nik: input.nik.trim(),
+      captcha: input.captcha.trim(),
+      sessionId: (input.sessionId ?? "").trim(),
+    };
+  })
+  .handler(async ({ data }): Promise<{ ok: boolean; message: string; rows: Record<string, string>[] }> => {
+    const { nik, captcha, sessionId } = data;
+    const body = new URLSearchParams({
+      apikey: BPJS_API_KEY,
+      action: "ceknik",
+      nik,
+      captcha,
+      sessionId,
+    }).toString();
+
+    let raw: Awaited<ReturnType<typeof fetchBpjsRaw>>;
+    try {
+      raw = await fetchBpjsRaw(BPJS_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          ...(sessionId ? { Cookie: `PHPSESSID=${sessionId}` } : {}),
+        },
+        body,
+      });
+    } catch (e) {
+      return { ok: false, message: `Gagal menghubungi server BPJS: ${(e as Error).message || String(e)}`, rows: [] };
+    }
+
+    const text = raw.text.trim();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      // Mungkin seluruh response adalah ciphertext base64
+      const dec = tryAesDecrypt(text);
+      if (dec) {
+        try { parsed = JSON.parse(dec); } catch { parsed = { result: dec }; }
+      } else {
+        return { ok: false, message: "Server BPJS tidak mengembalikan JSON yang valid.", rows: [] };
+      }
+    }
+
+    const decrypted = deepDecrypt(parsed) as Record<string, unknown> | unknown[];
+
+    // Normalisasi
+    const obj = (Array.isArray(decrypted) ? { data: decrypted } : decrypted) as Record<string, unknown>;
+    const status = obj.status;
+    const isError =
+      status === false ||
+      String(status).toLowerCase() === "false" ||
+      String(status).toLowerCase() === "error" ||
+      obj.error === true;
+
+    const dataField = obj.data ?? obj.result ?? obj;
+    const rowsArr: Record<string, unknown>[] = Array.isArray(dataField)
+      ? (dataField as Record<string, unknown>[])
+      : [dataField as Record<string, unknown>];
+
+    const rows = rowsArr.map((r) => {
+      const flat: Record<string, string> = {};
+      for (const [k, v] of Object.entries(r ?? {})) {
+        if (v === null || v === undefined) continue;
+        flat[k.toUpperCase()] = typeof v === "object" ? JSON.stringify(v) : String(v);
+      }
+      return flat;
+    });
+
+    if (isError) {
+      const msg =
+        (obj.message as string) ||
+        (obj.result as string) ||
+        "Captcha salah / data tidak ditemukan. Muat captcha baru lalu coba lagi.";
+      return { ok: false, message: msg, rows: rows.filter((r) => Object.keys(r).length) };
+    }
+
+    return {
+      ok: true,
+      message: `Data BPJS untuk NIK ${nik} ditemukan`,
+      rows,
     };
   });
