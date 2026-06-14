@@ -7,7 +7,7 @@ import { QueryConsole } from "@/components/osint/QueryConsole";
 import { ResultsPanel } from "@/components/osint/ResultsPanel";
 import { generateMockResult, type Feature, type OsintResult } from "@/lib/osint-data";
 import { useAuth, storedToFeature } from "@/lib/auth";
-import { lookupNik2KK, lookupImei, lookupBpjs, lookupNopol } from "@/lib/lookup.functions";
+import { lookupNik2KK, lookupImei, lookupBpjs, lookupNopol, lookupMahasiswa } from "@/lib/lookup.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { BpjsConsole } from "@/components/osint/BpjsConsole";
 import { Info, LogOut, ShieldCheck, Send } from "lucide-react";
@@ -51,6 +51,7 @@ function Dashboard() {
   const lookupImeiFn = useServerFn(lookupImei);
   const lookupBpjsFn = useServerFn(lookupBpjs);
   const lookupNopolFn = useServerFn(lookupNopol);
+  const lookupMahasiswaFn = useServerFn(lookupMahasiswa);
 
   const handleBpjsSubmit = async (payload: { nik: string; captcha: string; sessionId: string }) => {
     if (!feature) return;
@@ -98,8 +99,8 @@ function Dashboard() {
     setLoading(true);
     setResult(null);
 
-    if (feature.id === "imei" || feature.id === "nopol") {
-      const fn = feature.id === "imei" ? lookupImeiFn : lookupNopolFn;
+    if (feature.id === "imei" || feature.id === "nopol" || feature.id === "mahasiswa") {
+      const fn = feature.id === "imei" ? lookupImeiFn : feature.id === "nopol" ? lookupNopolFn : lookupMahasiswaFn;
       try {
         const res = await fn({ data: { query: q } });
         const safe = res ?? { ok: false, message: "Tidak ada respons dari server", rows: [] };
