@@ -51,6 +51,7 @@ function Dashboard() {
   const lookupImeiFn = useServerFn(lookupImei);
   const lookupBpjsFn = useServerFn(lookupBpjs);
   const lookupNopolFn = useServerFn(lookupNopol);
+  const lookupMahasiswaFn = useServerFn(lookupMahasiswa);
 
   const handleBpjsSubmit = async (payload: { nik: string; captcha: string; sessionId: string }) => {
     if (!feature) return;
