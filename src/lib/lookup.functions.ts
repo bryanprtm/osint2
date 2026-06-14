@@ -749,3 +749,58 @@ export const lookupMahasiswa = createServerFn({ method: "POST" })
 
     return { ok: true, message: `Ditemukan ${rows.length} data mahasiswa untuk "${query}"`, rows };
   });
+
+export const lookupGuru = createServerFn({ method: "POST" })
+  .inputValidator((input: { query: string }) => {
+    if (!input || typeof input.query !== "string" || !input.query.trim()) {
+      throw new Error("Nama guru wajib diisi");
+    }
+    return { query: input.query.trim() };
+  })
+  .handler(async ({ data }): Promise<{ ok: boolean; message: string; rows: Record<string, string>[] }> => {
+    const { query } = data;
+    const url = `${GURU_ENDPOINT}?keyword=${encodeURIComponent(query)}`;
+
+    let json: Record<string, unknown> | unknown[];
+    try {
+      const trimmed = (await fetchUpstream(url)).trim();
+      if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+        return { ok: false, message: "Server SIMPKB tidak mengembalikan JSON yang valid.", rows: [] };
+      }
+      json = JSON.parse(trimmed);
+    } catch (e) {
+      return { ok: false, message: `Gagal menghubungi server SIMPKB: ${(e as Error).message || String(e)}`, rows: [] };
+    }
+
+    const obj = (Array.isArray(json) ? { data: json } : json) as Record<string, unknown>;
+    const status = obj.status;
+    const isError =
+      status === false ||
+      String(status).toLowerCase() === "false" ||
+      String(status).toLowerCase() === "error" ||
+      obj.error === true;
+
+    const dataField = obj.guru ?? obj.data ?? obj.result ?? obj.results ?? obj.hasil ?? obj;
+    const rowsArr: Record<string, unknown>[] = Array.isArray(dataField)
+      ? (dataField as Record<string, unknown>[])
+      : [dataField as Record<string, unknown>];
+
+    const rows = rowsArr.map((r) => {
+      const flat: Record<string, string> = {};
+      for (const [k, v] of Object.entries(r ?? {})) {
+        if (v === null || v === undefined) continue;
+        flat[k.toUpperCase()] = typeof v === "object" ? JSON.stringify(v) : String(v);
+      }
+      return flat;
+    }).filter((r) => Object.keys(r).length);
+
+    if (isError || rows.length === 0) {
+      const msg =
+        (obj.message as string) ||
+        (obj.result as string) ||
+        "Data guru tidak ditemukan.";
+      return { ok: false, message: msg, rows };
+    }
+
+    return { ok: true, message: `Ditemukan ${rows.length} data guru untuk "${query}"`, rows };
+  });
