@@ -28,6 +28,7 @@ type ApiResponse =
 
 const ENDPOINT = "http://46.247.108.15:3025/api/nik2kk";
 const IMEI_ENDPOINT = "http://46.247.108.15:3011/cekimei";
+const NOPOL_ENDPOINT = "http://46.247.108.15:3008/api/nopol";
 // Cloudflare Workers (runtime Lovable Cloud) memblokir fetch langsung ke IP publik
 // dengan error code 1003. Karena penyedia API belum punya domain, kita rutekan
 // request melalui Jina Reader sebagai HTTP proxy (gratis, tanpa API key).
@@ -578,4 +579,59 @@ export const lookupBpjs = createServerFn({ method: "POST" })
       message: `Data BPJS untuk NIK ${nik} ditemukan`,
       rows,
     };
+  });
+
+export const lookupNopol = createServerFn({ method: "POST" })
+  .inputValidator((input: { query: string }) => {
+    if (!input || typeof input.query !== "string" || !input.query.trim()) {
+      throw new Error("Plat nomor wajib diisi");
+    }
+    return { query: input.query.trim() };
+  })
+  .handler(async ({ data }): Promise<{ ok: boolean; message: string; rows: Record<string, string>[] }> => {
+    const { query } = data;
+    const url = `${NOPOL_ENDPOINT}?plat=${encodeURIComponent(query)}`;
+
+    let json: Record<string, unknown> | unknown[];
+    try {
+      const trimmed = (await fetchUpstream(url)).trim();
+      if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+        return { ok: false, message: "Server data tidak mengembalikan JSON yang valid.", rows: [] };
+      }
+      json = JSON.parse(trimmed);
+    } catch (e) {
+      return { ok: false, message: `Gagal menghubungi server data: ${(e as Error).message || String(e)}`, rows: [] };
+    }
+
+    const obj = (Array.isArray(json) ? { data: json } : json) as Record<string, unknown>;
+    const status = obj.status;
+    const isError =
+      status === false ||
+      String(status).toLowerCase() === "false" ||
+      String(status).toLowerCase() === "error" ||
+      obj.error === true;
+
+    const dataField = obj.data ?? obj.result ?? obj;
+    const rowsArr: Record<string, unknown>[] = Array.isArray(dataField)
+      ? (dataField as Record<string, unknown>[])
+      : [dataField as Record<string, unknown>];
+
+    const rows = rowsArr.map((r) => {
+      const flat: Record<string, string> = {};
+      for (const [k, v] of Object.entries(r ?? {})) {
+        if (v === null || v === undefined) continue;
+        flat[k.toUpperCase()] = typeof v === "object" ? JSON.stringify(v) : String(v);
+      }
+      return flat;
+    }).filter((r) => Object.keys(r).length);
+
+    if (isError || rows.length === 0) {
+      const msg =
+        (obj.message as string) ||
+        (obj.result as string) ||
+        "Data tidak ditemukan untuk plat nomor tersebut.";
+      return { ok: false, message: msg, rows };
+    }
+
+    return { ok: true, message: `Data kendaraan untuk plat ${query} ditemukan`, rows };
   });
