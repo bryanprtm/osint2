@@ -331,18 +331,17 @@ async function fetchBpjsRaw(url: string, init?: RequestInit): Promise<{ contentT
     return direct;
   }
 
-  // 2) Proxy biner-safe yang meneruskan body apa adanya
-  const proxies = [
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-  ];
+  // 2) Fallback proxy. codetabs dihapus karena sering membalas 400
+  //    "Bad request, valid format is api.codetabs.com/v1/{service}..."
+  //    alih-alih meneruskan captcha/image dari server BPJS.
+  const proxies = [`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`];
   for (const purl of proxies) {
     const r = await fetchBpjsOnce(purl, init);
     if (r && r.bytes.length > 0 && !/error code: ?1003/i.test(r.text)) {
       return r;
     }
   }
-  throw new Error("Semua proxy gagal menjangkau server BPJS");
+  throw new Error("Semua jalur koneksi gagal menjangkau server BPJS");
 }
 
 function extractBpjsJson(text: string): string {
