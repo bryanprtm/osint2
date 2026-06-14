@@ -607,12 +607,30 @@ export const lookupBpjs = createServerFn({ method: "POST" })
     });
 
     if (isError) {
-      const msg =
-        (obj.message as string) ||
-        (obj.result as string) ||
-        "Captcha salah / data tidak ditemukan. Muat captcha baru lalu coba lagi.";
+      const rawMsg = ((obj.message as string) || (obj.result as string) || "").trim();
+      const lower = rawMsg.toLowerCase();
+      const isCaptcha =
+        /captcha|capcha|kode\s*verifikasi|verification\s*code|salah.*captcha|captcha.*salah|invalid.*captcha|wrong.*captcha/.test(
+          lower,
+        );
+      const isNotFound =
+        /tidak\s*ditemukan|tidak\s*ada|not\s*found|no\s*data|kosong|belum\s*terdaftar|tidak\s*terdaftar/.test(
+          lower,
+        );
+
+      let msg: string;
+      if (isCaptcha) {
+        msg = `❌ Captcha salah. Silakan muat captcha baru dan coba lagi.${rawMsg ? ` (${rawMsg})` : ""}`;
+      } else if (isNotFound) {
+        msg = `ℹ️ Data BPJS untuk NIK ${nik} tidak ditemukan.${rawMsg ? ` (${rawMsg})` : ""}`;
+      } else if (rawMsg) {
+        msg = `⚠️ ${rawMsg}`;
+      } else {
+        msg = "⚠️ Permintaan gagal. Periksa NIK & captcha, lalu coba lagi.";
+      }
       return { ok: false, message: msg, rows: rows.filter((r) => Object.keys(r).length) };
     }
+
 
     return {
       ok: true,
