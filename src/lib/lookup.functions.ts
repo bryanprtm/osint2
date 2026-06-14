@@ -349,8 +349,15 @@ async function fetchBpjsRaw(url: string, init?: RequestInit): Promise<{ contentT
 export const getBpjsCaptcha = createServerFn({ method: "GET" })
   .handler(async (): Promise<{ ok: boolean; message: string; captcha?: string; sessionId?: string }> => {
     const url = `${BPJS_ENDPOINT}?apikey=${BPJS_API_KEY}&action=captcha`;
+    // Generate sendiri PHPSESSID — banyak proxy strip Set-Cookie, jadi kita pre-set
+    // dan pakai cookie yang sama saat POST ceknik agar captcha tetap valid.
+    const ownSession = Array.from(crypto.getRandomValues(new Uint8Array(13)))
+      .map((b) => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36])
+      .join("");
     try {
-      const res = await fetchBpjsRaw(url);
+      const res = await fetchBpjsRaw(url, {
+        headers: { Cookie: `PHPSESSID=${ownSession}` },
+      });
 
       // Coba parse JSON dulu
       if (res.text.trim().startsWith("{")) {
@@ -365,7 +372,7 @@ export const getBpjsCaptcha = createServerFn({ method: "GET" })
             (j.sessionId as string) ||
             (j.session_id as string) ||
             (j.session as string) ||
-            "";
+            ownSession;
           if (captcha) {
             const dataUri = captcha.startsWith("data:")
               ? captcha
@@ -378,11 +385,28 @@ export const getBpjsCaptcha = createServerFn({ method: "GET" })
       }
 
       // Asumsikan respons biner gambar
-      if (res.contentType.startsWith("image/") || res.bytes.length > 0) {
-        const b64 = Buffer.from(res.bytes).toString("base64");
-        const mime = res.contentType.startsWith("image/") ? res.contentType : "image/png";
-        // Ambil sessionId dari Set-Cookie (PHPSESSID/JSESSIONID)
-        let sessionId = "";
+      if (res.bytes.length > 0) {
+        // Validasi minimal: PNG/JPEG/GIF/WebP magic bytes
+        const b = res.bytes;
+        const isPng = b[0] === 0x89 && b[1] === 0x50;
+        const isJpg = b[0] === 0xff && b[1] === 0xd8;
+        const isGif = b[0] === 0x47 && b[1] === 0x49;
+        const isWebp = b[0] === 0x52 && b[8] === 0x57;
+        const ctImage = res.contentType.startsWith("image/");
+        if (!ctImage && !isPng && !isJpg && !isGif && !isWebp) {
+          // Server kembalikan teks (mungkin error 1003 / HTML)
+          return {
+            ok: false,
+            message: `Server BPJS tidak mengirim gambar captcha. ${res.text.slice(0, 120)}`.trim(),
+          };
+        }
+        const b64 = Buffer.from(b).toString("base64");
+        const mime = ctImage
+          ? res.contentType
+          : isJpg ? "image/jpeg" : isGif ? "image/gif" : isWebp ? "image/webp" : "image/png";
+
+        // Pakai sessionId yang kita pre-set; jika proxy meneruskan Set-Cookie, ambil itu
+        let sessionId = ownSession;
         if (res.setCookie) {
           const m = res.setCookie.match(/(PHPSESSID|JSESSIONID|sessionId)=([^;]+)/i);
           if (m) sessionId = m[2];
@@ -395,6 +419,7 @@ export const getBpjsCaptcha = createServerFn({ method: "GET" })
       return { ok: false, message: `Gagal menghubungi server BPJS: ${(e as Error).message || String(e)}` };
     }
   });
+
 
 export const lookupBpjs = createServerFn({ method: "POST" })
   .inputValidator((input: { nik: string; captcha: string; sessionId: string }) => {
