@@ -100,88 +100,144 @@ function isRateLimitedText(text: string): boolean {
   );
 }
 
-async function fetchUpstream(url: string): Promise<string> {
-  // 1) Coba langsung dulu (jika environment mengizinkan akses IP).
-  try {
-    const direct = await fetch(url, {
-      method: "GET",
-      headers: {
-        Accept: "application/json, text/plain, */*",
-        "User-Agent": "Mozilla/5.0 (compatible; OsintLookup/1.0)",
-      },
-      signal: AbortSignal.timeout(45_000),
-    });
-    const directText = await direct.text();
-    if (!isRateLimitedText(directText)) {
-      const txt = extractJsonPayload(directText);
-      if (txt) return txt;
-    }
-    // fallthrough ke proxy bila non-JSON (mis. error 1003) atau rate-limited
-  } catch {
-    // fallthrough ke proxy
-  }
+function isRetryableStatus(status: number): boolean {
+  return [408, 425, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526].includes(status);
+}
 
-  // 2) Fallback via beberapa proxy publik. Diurutkan dengan acak agar beban
-  //    tersebar dan tidak selalu kena rate-limit di proxy pertama setelah publish
-  //    (semua user berbagi IP Cloudflare Worker yang sama).
+function shuffle<T>(items: T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function buildProxyCandidates(url: string): string[] {
   const stripped = url.replace(/^https?:\/\//, "");
-  const proxyCandidates = [
+  const [base, query = ""] = url.split("?");
+  const encodedQuery = query.replace(/&/g, "%26").replace(/=/g, "%3D");
+
+  return Array.from(new Set([
     `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
     `https://corsproxy.io/?${encodeURIComponent(url)}`,
     `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
     `https://proxy.cors.sh/${url}`,
     `${PROXY}${url}`,
+    `${PROXY}${base}`,
     `${PROXY}http://${stripped}`,
-    `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-  ];
+    query ? `${PROXY}${base}%3F${encodedQuery}` : `${PROXY}${base}`,
+    query ? `${PROXY}http://${stripped.split("?")[0]}%3F${encodedQuery}` : `${PROXY}http://${stripped}`,
+  ]));
+}
 
-  // Acak urutan agar tidak selalu menumpuk di proxy pertama
-  for (let i = proxyCandidates.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [proxyCandidates[i], proxyCandidates[j]] = [proxyCandidates[j], proxyCandidates[i]];
-  }
-
+async function fetchUpstream(url: string): Promise<string> {
   let lastError = "";
-  for (const proxyUrl of proxyCandidates) {
+  const rememberError = (message: string) => {
+    if (!message) return;
+    lastError = message;
+  };
+
+  // 1) Coba langsung beberapa kali dulu, karena sebagian endpoint ternyata bisa
+  //    diakses tanpa proxy dan ini jalur paling stabil setelah publish.
+  for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const res = await fetch(proxyUrl, {
+      const direct = await fetch(url, {
         method: "GET",
         headers: {
           Accept: "application/json, text/plain, */*",
-          "X-Return-Format": "text",
           "User-Agent": "Mozilla/5.0 (compatible; OsintLookup/1.0)",
         },
         signal: AbortSignal.timeout(45_000),
       });
-      let body = await res.text();
-
-      // Unwrap allorigins /get?url= wrapper
-      if (proxyUrl.includes("allorigins.win/get")) {
-        try {
-          const j = JSON.parse(body) as { contents?: string };
-          if (typeof j.contents === "string") body = j.contents;
-        } catch {
-          // biarkan
-        }
-      }
+      const body = await direct.text();
 
       if (isRateLimitedText(body)) {
-        lastError = "Rate limit pada proxy, mencoba alternatif…";
+        rememberError("Rate limit pada server sumber");
         continue;
       }
-      if (!res.ok && res.status !== 200) {
-        lastError = `Proxy HTTP ${res.status}`;
-        continue;
-      }
+
       const extracted = extractJsonPayload(body);
       if (extracted) return extracted;
-      lastError = "Proxy mengembalikan format tidak dikenal";
+
+      if (isRetryableStatus(direct.status)) {
+        rememberError(`HTTP ${direct.status}`);
+        continue;
+      }
+
+      if (!direct.ok) {
+        rememberError(`HTTP ${direct.status}`);
+        continue;
+      }
+
+      rememberError("Server sumber mengembalikan format tidak dikenal");
     } catch (e) {
-      lastError = (e as Error).message || "Proxy error";
+      rememberError((e as Error).message || "Koneksi langsung gagal");
     }
   }
 
-  throw new Error(lastError || "Semua proxy gagal mengambil data");
+  // 2) Fallback via beberapa proxy publik. Dijalankan 2 putaran dengan urutan
+  //    acak agar tidak mentok di proxy yang sedang 522/timeout.
+  for (let round = 0; round < 2; round++) {
+    for (const proxyUrl of shuffle(buildProxyCandidates(url))) {
+      try {
+        const res = await fetch(proxyUrl, {
+          method: "GET",
+          headers: {
+            Accept: "application/json, text/plain, */*",
+            "X-Return-Format": "text",
+            "User-Agent": "Mozilla/5.0 (compatible; OsintLookup/1.0)",
+          },
+          signal: AbortSignal.timeout(45_000),
+        });
+        let body = await res.text();
+
+        // Unwrap allorigins /get?url= wrapper
+        if (proxyUrl.includes("allorigins.win/get")) {
+          try {
+            const j = JSON.parse(body) as { contents?: string };
+            if (typeof j.contents === "string") body = j.contents;
+          } catch {
+            // biarkan
+          }
+        }
+
+        if (isRateLimitedText(body)) {
+          rememberError("Rate limit pada proxy");
+          continue;
+        }
+
+        const extracted = extractJsonPayload(body);
+        if (extracted) return extracted;
+
+        if (isRetryableStatus(res.status)) {
+          rememberError(`Proxy HTTP ${res.status}`);
+          continue;
+        }
+
+        if (!res.ok && res.status !== 200) {
+          rememberError(`Proxy HTTP ${res.status}`);
+          continue;
+        }
+
+        rememberError("Proxy mengembalikan format tidak dikenal");
+      } catch (e) {
+        rememberError((e as Error).message || "Proxy error");
+      }
+    }
+  }
+
+  if (
+    /proxy http 52/i.test(lastError) ||
+    /proxy http 408/i.test(lastError) ||
+    /timeout/i.test(lastError) ||
+    /fetch failed/i.test(lastError)
+  ) {
+    throw new Error("Jalur koneksi ke server sumber sedang tidak stabil, silakan coba lagi");
+  }
+
+  throw new Error(lastError || "Semua jalur koneksi gagal mengambil data");
 }
 
 function mapRow(r: ApiRow): Record<string, string> {
