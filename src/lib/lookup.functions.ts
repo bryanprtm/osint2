@@ -491,15 +491,21 @@ export const lookupBpjs = createServerFn({ method: "POST" })
 
     const text = raw.text.trim();
     let parsed: unknown;
+    const extracted = extractBpjsJson(text);
     try {
-      parsed = JSON.parse(text);
+      parsed = JSON.parse(extracted);
     } catch {
       // Mungkin seluruh response adalah ciphertext base64
-      const dec = tryAesDecrypt(text);
+      const dec = tryAesDecrypt(extracted || text);
       if (dec) {
         try { parsed = JSON.parse(dec); } catch { parsed = { result: dec }; }
       } else {
-        return { ok: false, message: "Server BPJS tidak mengembalikan JSON yang valid.", rows: [] };
+        const snippet = (extracted || text).slice(0, 200).replace(/\s+/g, " ");
+        return {
+          ok: false,
+          message: `Server BPJS tidak mengembalikan JSON yang valid. Respons: ${snippet}`,
+          rows: [],
+        };
       }
     }
 
