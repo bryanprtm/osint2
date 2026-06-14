@@ -28,6 +28,7 @@ type ApiResponse =
 
 const ENDPOINT = "http://46.247.108.15:3025/api/nik2kk";
 const IMEI_ENDPOINT = "http://46.247.108.15:3011/cekimei";
+const NOPOL_ENDPOINT = "http://46.247.108.15:3008/api/nopol";
 // Cloudflare Workers (runtime Lovable Cloud) memblokir fetch langsung ke IP publik
 // dengan error code 1003. Karena penyedia API belum punya domain, kita rutekan
 // request melalui Jina Reader sebagai HTTP proxy (gratis, tanpa API key).
