@@ -324,21 +324,53 @@ async function fetchBpjsOnce(url: string, init?: RequestInit): Promise<{ content
   }
 }
 
+function unwrapAllOriginsGet(raw: { contentType: string; bytes: Uint8Array; text: string; setCookie: string | null }): typeof raw {
+  // allorigins /get?url= membungkus respons asli dalam {contents, status:{content_type,...}}
+  try {
+    const j = JSON.parse(raw.text) as { contents?: string; status?: { content_type?: string } };
+    if (typeof j.contents === "string") {
+      const text = j.contents;
+      return {
+        contentType: j.status?.content_type || "text/plain",
+        bytes: new TextEncoder().encode(text),
+        text,
+        setCookie: raw.setCookie,
+      };
+    }
+  } catch {
+    // bukan JSON allorigins → biarkan apa adanya
+  }
+  return raw;
+}
+
 async function fetchBpjsRaw(url: string, init?: RequestInit): Promise<{ contentType: string; bytes: Uint8Array; text: string; setCookie: string | null }> {
-  // 1) direct (boleh gagal di Cloudflare Workers untuk IP publik → error 1003)
+  // 1) direct (di CF Worker bisa berhasil untuk IP publik; mendukung POST)
   const direct = await fetchBpjsOnce(url, init);
   if (direct && direct.bytes.length > 0 && !/error code: ?1003/i.test(direct.text)) {
     return direct;
   }
 
-  // 2) Fallback proxy. codetabs dihapus karena sering membalas 400
-  //    "Bad request, valid format is api.codetabs.com/v1/{service}..."
-  //    alih-alih meneruskan captcha/image dari server BPJS.
-  const proxies = [`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`];
-  for (const purl of proxies) {
-    const r = await fetchBpjsOnce(purl, init);
+  // 2) Fallback proxy yang mendukung GET. Pakai allorigins /get?url=
+  //    karena /raw sering 500 untuk endpoint IP+port, dan /get membungkus
+  //    respons lengkap (termasuk binary kecil) dalam JSON {contents,...}.
+  //    Catatan: allorigins TIDAK meneruskan method POST — jika init.method=POST
+  //    dan direct gagal, kita tetap coba sebagai GET dengan body diappend ke
+  //    query (BPJS API menerima param via query untuk sebagian besar action).
+  const method = (init?.method || "GET").toUpperCase();
+  let targetUrl = url;
+  if (method !== "GET" && init?.body) {
+    const sep = targetUrl.includes("?") ? "&" : "?";
+    targetUrl = `${targetUrl}${sep}${String(init.body)}`;
+  }
+  const proxies = [
+    `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+  ];
+  for (let i = 0; i < proxies.length; i++) {
+    const purl = proxies[i];
+    const r = await fetchBpjsOnce(purl, { headers: init?.headers });
     if (r && r.bytes.length > 0 && !/error code: ?1003/i.test(r.text)) {
-      return r;
+      return i === 0 ? unwrapAllOriginsGet(r) : r;
     }
   }
   throw new Error("Semua jalur koneksi gagal menjangkau server BPJS");
