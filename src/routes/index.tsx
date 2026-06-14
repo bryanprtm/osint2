@@ -54,13 +54,14 @@ function Dashboard() {
   const lookupMahasiswaFn = useServerFn(lookupMahasiswa);
   const lookupGuruFn = useServerFn(lookupGuru);
 
-  const resolvedFeatureId = feature?.code === "OSI-051"
-    ? "imei"
-    : feature?.code === "OSI-052"
+  const featureMeta = `${feature?.id ?? ""} ${feature?.code ?? ""} ${feature?.name ?? ""} ${feature?.desc ?? ""} ${feature?.input ?? ""}`.toLowerCase();
+  const resolvedFeatureId = featureMeta.includes("simpkb") || featureMeta.includes(" guru") || featureMeta.startsWith("guru ") || featureMeta.includes("cek guru")
+    ? "guru"
+    : featureMeta.includes("mahasiswa") || featureMeta.includes("pddikti")
       ? "mahasiswa"
-      : feature?.code === "OSI-053"
-        ? "guru"
-        : feature?.code === "OSI-005"
+      : featureMeta.includes("imei")
+        ? "imei"
+        : featureMeta.includes("nopol") || featureMeta.includes("plat")
           ? "nopol"
           : feature?.id;
 
