@@ -54,6 +54,16 @@ function Dashboard() {
   const lookupMahasiswaFn = useServerFn(lookupMahasiswa);
   const lookupGuruFn = useServerFn(lookupGuru);
 
+  const resolvedFeatureId = feature?.code === "OSI-051"
+    ? "imei"
+    : feature?.code === "OSI-052"
+      ? "mahasiswa"
+      : feature?.code === "OSI-053"
+        ? "guru"
+        : feature?.code === "OSI-005"
+          ? "nopol"
+          : feature?.id;
+
   const handleBpjsSubmit = async (payload: { nik: string; captcha: string; sessionId: string }) => {
     if (!feature) return;
     setLoading(true);
@@ -100,8 +110,8 @@ function Dashboard() {
     setLoading(true);
     setResult(null);
 
-    if (feature.id === "imei" || feature.id === "nopol" || feature.id === "mahasiswa" || feature.id === "guru") {
-      const fn = feature.id === "imei" ? lookupImeiFn : feature.id === "nopol" ? lookupNopolFn : feature.id === "mahasiswa" ? lookupMahasiswaFn : lookupGuruFn;
+    if (resolvedFeatureId === "imei" || resolvedFeatureId === "nopol" || resolvedFeatureId === "mahasiswa" || resolvedFeatureId === "guru") {
+      const fn = resolvedFeatureId === "imei" ? lookupImeiFn : resolvedFeatureId === "nopol" ? lookupNopolFn : resolvedFeatureId === "mahasiswa" ? lookupMahasiswaFn : lookupGuruFn;
       try {
         const res = await fn({ data: { query: q } });
         const safe = res ?? { ok: false, message: "Tidak ada respons dari server", rows: [] };
@@ -129,8 +139,8 @@ function Dashboard() {
       return;
     }
 
-    if (feature.id === "nik" || feature.id === "kk" || feature.id === "nama") {
-      const kind = feature.id as "nik" | "kk" | "nama";
+    if (resolvedFeatureId === "nik" || resolvedFeatureId === "kk" || resolvedFeatureId === "nama") {
+      const kind = resolvedFeatureId as "nik" | "kk" | "nama";
       try {
         const res = await lookup({ data: { kind, query: q } });
         const safe = res ?? { ok: false, message: "Tidak ada respons dari server", rows: [] };
