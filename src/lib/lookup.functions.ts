@@ -90,6 +90,16 @@ function extractJsonPayload(raw: string): string {
   return "";
 }
 
+function isRateLimitedText(text: string): boolean {
+  const head = text.slice(0, 400).toLowerCase();
+  return (
+    /rate limit exceeded/i.test(head) ||
+    /per ip rate limit/i.test(head) ||
+    /too many requests/i.test(head) ||
+    /429/.test(head) && /limit/i.test(head)
+  );
+}
+
 async function fetchUpstream(url: string): Promise<string> {
   // 1) Coba langsung dulu (jika environment mengizinkan akses IP).
   try {
@@ -101,17 +111,37 @@ async function fetchUpstream(url: string): Promise<string> {
       },
       signal: AbortSignal.timeout(45_000),
     });
-    const txt = extractJsonPayload(await direct.text());
-    if (txt) return txt;
-    // fallthrough ke proxy bila non-JSON (mis. error 1003)
+    const directText = await direct.text();
+    if (!isRateLimitedText(directText)) {
+      const txt = extractJsonPayload(directText);
+      if (txt) return txt;
+    }
+    // fallthrough ke proxy bila non-JSON (mis. error 1003) atau rate-limited
   } catch {
     // fallthrough ke proxy
   }
 
-  // 2) Fallback via Jina Reader proxy. Di beberapa environment, Jina bisa
-  //    mengembalikan JSON wrapper ATAU markdown/plain text, jadi keduanya didukung.
-  const proxyCandidates = [`${PROXY}${url}`, `${PROXY}http://${url.replace(/^https?:\/\//, "")}`];
+  // 2) Fallback via beberapa proxy publik. Diurutkan dengan acak agar beban
+  //    tersebar dan tidak selalu kena rate-limit di proxy pertama setelah publish
+  //    (semua user berbagi IP Cloudflare Worker yang sama).
+  const stripped = url.replace(/^https?:\/\//, "");
+  const proxyCandidates = [
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
+    `https://proxy.cors.sh/${url}`,
+    `${PROXY}${url}`,
+    `${PROXY}http://${stripped}`,
+    `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+  ];
 
+  // Acak urutan agar tidak selalu menumpuk di proxy pertama
+  for (let i = proxyCandidates.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [proxyCandidates[i], proxyCandidates[j]] = [proxyCandidates[j], proxyCandidates[i]];
+  }
+
+  let lastError = "";
   for (const proxyUrl of proxyCandidates) {
     try {
       const res = await fetch(proxyUrl, {
@@ -121,16 +151,37 @@ async function fetchUpstream(url: string): Promise<string> {
           "X-Return-Format": "text",
           "User-Agent": "Mozilla/5.0 (compatible; OsintLookup/1.0)",
         },
-        signal: AbortSignal.timeout(60_000),
+        signal: AbortSignal.timeout(45_000),
       });
-      const extracted = extractJsonPayload(await res.text());
+      let body = await res.text();
+
+      // Unwrap allorigins /get?url= wrapper
+      if (proxyUrl.includes("allorigins.win/get")) {
+        try {
+          const j = JSON.parse(body) as { contents?: string };
+          if (typeof j.contents === "string") body = j.contents;
+        } catch {
+          // biarkan
+        }
+      }
+
+      if (isRateLimitedText(body)) {
+        lastError = "Rate limit pada proxy, mencoba alternatif…";
+        continue;
+      }
+      if (!res.ok && res.status !== 200) {
+        lastError = `Proxy HTTP ${res.status}`;
+        continue;
+      }
+      const extracted = extractJsonPayload(body);
       if (extracted) return extracted;
-    } catch {
-      // coba kandidat proxy berikutnya
+      lastError = "Proxy mengembalikan format tidak dikenal";
+    } catch (e) {
+      lastError = (e as Error).message || "Proxy error";
     }
   }
 
-  throw new Error("Proxy tidak mengembalikan isi data");
+  throw new Error(lastError || "Semua proxy gagal mengambil data");
 }
 
 function mapRow(r: ApiRow): Record<string, string> {
