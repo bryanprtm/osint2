@@ -35,6 +35,7 @@ export const FEATURES: Feature[] = [
   { id: "pos", code: "OSI-013", name: "POS ALL OPERATOR", desc: "Pelacakan posisi lintas operator", input: "Nomor HP", placeholder: "628xxxxxxxxx", category: "Geo & Sinyal", icon: Satellite },
   { id: "imei", code: "OSI-051", name: "CEK IMEI", desc: "Validasi & informasi perangkat via IMEI", input: "IMEI (14-15 digit)", placeholder: "356938xxxxxxxxx", category: "Telekomunikasi", icon: Cpu },
   { id: "mahasiswa", code: "OSI-052", name: "CEK MAHASISWA", desc: "Pencarian data mahasiswa via Nama / NIM (PDDikti)", input: "Nama / NIM", placeholder: "Budi Santoso", category: "Pendidikan", icon: GraduationCap },
+  { id: "guru", code: "OSI-053", name: "CEK GURU SIMPKB", desc: "Pencarian data guru via Nama (SIMPKB)", input: "Nama Guru", placeholder: "Budi Santoso", category: "Pendidikan", icon: GraduationCap },
   { id: "media", code: "OSI-014", name: "MEDIA MONITORING", desc: "Monitoring berita & sosial media", input: "Keyword / Nama", placeholder: "kata kunci...", category: "Analitik", icon: Newspaper },
 
   // ── Cybersecurity / Vulnerability Scanning ─────────────────────────────────
