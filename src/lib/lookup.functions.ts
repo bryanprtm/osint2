@@ -45,8 +45,9 @@ function extractJsonPayload(raw: string): string {
     try {
       const parsed = JSON.parse(text) as { data?: { text?: string } };
       const inner = parsed?.data?.text?.trim();
-      if (inner && (inner.startsWith("{") || inner.startsWith("["))) {
-        return extractJsonPayload(inner);
+      if (inner) {
+        const extractedInner = extractJsonPayload(inner);
+        if (extractedInner) return extractedInner;
       }
     } catch {
       // bukan JSON valid, lanjut
@@ -71,7 +72,14 @@ function extractJsonPayload(raw: string): string {
     }
   }
 
-  const firstJsonIndex = Math.max(text.indexOf("{"), text.indexOf("["));
+  const objectIndex = text.indexOf("{");
+  const arrayIndex = text.indexOf("[");
+  const firstJsonIndex =
+    objectIndex === -1
+      ? arrayIndex
+      : arrayIndex === -1
+        ? objectIndex
+        : Math.min(objectIndex, arrayIndex);
   if (firstJsonIndex >= 0) {
     const candidate = text.slice(firstJsonIndex).trim();
     if (candidate.startsWith("{") || candidate.startsWith("[")) {
