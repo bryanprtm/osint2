@@ -103,6 +103,19 @@ function isRateLimitedText(text: string): boolean {
   );
 }
 
+function isBlockedProxyText(text: string): boolean {
+  const head = text.slice(0, 600).toLowerCase();
+  return (
+    /^forbidden\b/i.test(head) ||
+    /\b403\b/.test(head) ||
+    /access denied/i.test(head) ||
+    /request (has been )?blocked/i.test(head) ||
+    /you don't have permission/i.test(head) ||
+    /security policy/i.test(head) ||
+    /cloudflare/i.test(head) && /forbidden|blocked|denied/i.test(head)
+  );
+}
+
 function normalizeLookupErrorMessage(message: string): string {
   const text = (message || "").trim();
   if (!text) {
@@ -120,6 +133,11 @@ function normalizeLookupErrorMessage(message: string): string {
   }
 
   if (
+    /http 403/i.test(head) ||
+    /proxy http 403/i.test(head) ||
+    /forbidden/i.test(head) ||
+    /access denied/i.test(head) ||
+    isBlockedProxyText(head) ||
     /proxy http 52/i.test(head) ||
     /proxy http 408/i.test(head) ||
     /timeout/i.test(head) ||
