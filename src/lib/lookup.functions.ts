@@ -177,7 +177,7 @@ function buildProxyCandidates(url: string): string[] {
   return Array.from(new Set([
     `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
     `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-    `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
     `https://proxy.cors.sh/${url}`,
     `${PROXY}${url}`,
     `${PROXY}${base}`,
