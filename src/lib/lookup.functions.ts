@@ -103,6 +103,36 @@ function isRateLimitedText(text: string): boolean {
   );
 }
 
+function normalizeLookupErrorMessage(message: string): string {
+  const text = (message || "").trim();
+  if (!text) {
+    return "Jalur koneksi ke server sumber sedang tidak stabil, silakan coba lagi";
+  }
+
+  const head = text.slice(0, 600).toLowerCase();
+  if (
+    isRateLimitedText(head) ||
+    /server-side requests are not allowed/i.test(head) ||
+    /upgrade at https?:\/\/corsproxy\.io\/pricing/i.test(head) ||
+    /corsproxy\.io/i.test(head)
+  ) {
+    return "Jalur koneksi publik sedang dibatasi, silakan coba lagi beberapa saat lagi";
+  }
+
+  if (
+    /proxy http 52/i.test(head) ||
+    /proxy http 408/i.test(head) ||
+    /timeout/i.test(head) ||
+    /fetch failed/i.test(head) ||
+    /error code:?\s*1003/i.test(head) ||
+    /econn|network|socket|tls|connection/i.test(head)
+  ) {
+    return "Jalur koneksi ke server sumber sedang tidak stabil, silakan coba lagi";
+  }
+
+  return text;
+}
+
 function isRetryableStatus(status: number): boolean {
   return [408, 425, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526].includes(status);
 }
@@ -232,16 +262,7 @@ async function fetchUpstream(url: string): Promise<string> {
     }
   }
 
-  if (
-    /proxy http 52/i.test(lastError) ||
-    /proxy http 408/i.test(lastError) ||
-    /timeout/i.test(lastError) ||
-    /fetch failed/i.test(lastError)
-  ) {
-    throw new Error("Jalur koneksi ke server sumber sedang tidak stabil, silakan coba lagi");
-  }
-
-  throw new Error(lastError || "Semua jalur koneksi gagal mengambil data");
+  throw new Error(normalizeLookupErrorMessage(lastError || "Semua jalur koneksi gagal mengambil data"));
 }
 
 function mapRow(r: ApiRow): Record<string, string> {
