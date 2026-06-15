@@ -205,7 +205,7 @@ async function fetchUpstream(url: string): Promise<string> {
       });
       const body = await direct.text();
 
-      if (isRateLimitedText(body)) {
+      if (isRateLimitedText(body) || isBlockedProxyText(body)) {
         rememberError("Rate limit pada server sumber");
         continue;
       }
@@ -255,7 +255,7 @@ async function fetchUpstream(url: string): Promise<string> {
           }
         }
 
-        if (isRateLimitedText(body)) {
+        if (isRateLimitedText(body) || isBlockedProxyText(body)) {
           rememberError("Rate limit pada proxy");
           continue;
         }
@@ -263,7 +263,7 @@ async function fetchUpstream(url: string): Promise<string> {
         const extracted = extractJsonPayload(body);
         if (extracted) return extracted;
 
-        if (isRetryableStatus(res.status)) {
+        if (isRetryableStatus(res.status) || res.status === 403) {
           rememberError(`Proxy HTTP ${res.status}`);
           continue;
         }
