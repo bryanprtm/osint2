@@ -154,6 +154,14 @@ function normalizeLookupErrorMessage(message: string): string {
   return text;
 }
 
+function sanitizeLookupResultMessage(message: unknown, fallback: string): string {
+  const text = typeof message === "string" ? message.trim() : "";
+  if (!text) return fallback;
+
+  const normalized = normalizeLookupErrorMessage(text);
+  return normalized || fallback;
+}
+
 function isRetryableStatus(status: number): boolean {
   return [408, 425, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526].includes(status);
 }
@@ -178,7 +186,6 @@ function buildProxyCandidates(url: string): string[] {
     `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
     `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
     `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-    `https://proxy.cors.sh/${url}`,
     `${PROXY}${url}`,
     `${PROXY}${base}`,
     `${PROXY}http://${stripped}`,
