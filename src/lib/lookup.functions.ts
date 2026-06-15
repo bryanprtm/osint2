@@ -112,9 +112,12 @@ function isBlockedProxyText(text: string): boolean {
     /request (has been )?blocked/i.test(head) ||
     /you don't have permission/i.test(head) ||
     /security policy/i.test(head) ||
+    /bad request, valid format is/i.test(head) ||
+    /codetabs\.com/i.test(head) && /bad request|valid format/i.test(head) ||
     /cloudflare/i.test(head) && /forbidden|blocked|denied/i.test(head)
   );
 }
+
 
 function normalizeLookupErrorMessage(message: string): string {
   const text = (message || "").trim();
@@ -174,7 +177,7 @@ function buildProxyCandidates(url: string): string[] {
   return Array.from(new Set([
     `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
     `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-    `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
     `https://proxy.cors.sh/${url}`,
     `${PROXY}${url}`,
     `${PROXY}${base}`,
