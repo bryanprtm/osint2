@@ -112,9 +112,12 @@ function isBlockedProxyText(text: string): boolean {
     /request (has been )?blocked/i.test(head) ||
     /you don't have permission/i.test(head) ||
     /security policy/i.test(head) ||
+    /bad request, valid format is/i.test(head) ||
+    /codetabs\.com/i.test(head) && /bad request|valid format/i.test(head) ||
     /cloudflare/i.test(head) && /forbidden|blocked|denied/i.test(head)
   );
 }
+
 
 function normalizeLookupErrorMessage(message: string): string {
   const text = (message || "").trim();
