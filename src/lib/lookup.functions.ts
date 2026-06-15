@@ -91,12 +91,15 @@ function extractJsonPayload(raw: string): string {
 }
 
 function isRateLimitedText(text: string): boolean {
-  const head = text.slice(0, 400).toLowerCase();
+  const head = text.slice(0, 600).toLowerCase();
   return (
     /rate limit exceeded/i.test(head) ||
     /per ip rate limit/i.test(head) ||
     /too many requests/i.test(head) ||
-    /429/.test(head) && /limit/i.test(head)
+    /server-side requests are not allowed/i.test(head) ||
+    /corsproxy\.io\/pricing/i.test(head) ||
+    /quota.*exceeded/i.test(head) ||
+    (/429/.test(head) && /limit/i.test(head))
   );
 }
 
@@ -118,10 +121,11 @@ function buildProxyCandidates(url: string): string[] {
   const [base, query = ""] = url.split("?");
   const encodedQuery = query.replace(/&/g, "%26").replace(/=/g, "%3D");
 
+  // corsproxy.io dihapus: memblokir request server-side ("Server-side requests
+  // are not allowed on your plan. Upgrade at https://corsproxy.io/pricing/").
   return Array.from(new Set([
     `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
     `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-    `https://corsproxy.io/?${encodeURIComponent(url)}`,
     `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
     `https://proxy.cors.sh/${url}`,
     `${PROXY}${url}`,
