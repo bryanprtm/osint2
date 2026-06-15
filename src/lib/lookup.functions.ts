@@ -103,6 +103,19 @@ function isRateLimitedText(text: string): boolean {
   );
 }
 
+function isBlockedProxyText(text: string): boolean {
+  const head = text.slice(0, 600).toLowerCase();
+  return (
+    /^forbidden\b/i.test(head) ||
+    /\b403\b/.test(head) ||
+    /access denied/i.test(head) ||
+    /request (has been )?blocked/i.test(head) ||
+    /you don't have permission/i.test(head) ||
+    /security policy/i.test(head) ||
+    /cloudflare/i.test(head) && /forbidden|blocked|denied/i.test(head)
+  );
+}
+
 function normalizeLookupErrorMessage(message: string): string {
   const text = (message || "").trim();
   if (!text) {
@@ -120,6 +133,11 @@ function normalizeLookupErrorMessage(message: string): string {
   }
 
   if (
+    /http 403/i.test(head) ||
+    /proxy http 403/i.test(head) ||
+    /forbidden/i.test(head) ||
+    /access denied/i.test(head) ||
+    isBlockedProxyText(head) ||
     /proxy http 52/i.test(head) ||
     /proxy http 408/i.test(head) ||
     /timeout/i.test(head) ||
@@ -187,7 +205,7 @@ async function fetchUpstream(url: string): Promise<string> {
       });
       const body = await direct.text();
 
-      if (isRateLimitedText(body)) {
+      if (isRateLimitedText(body) || isBlockedProxyText(body)) {
         rememberError("Rate limit pada server sumber");
         continue;
       }
@@ -237,7 +255,7 @@ async function fetchUpstream(url: string): Promise<string> {
           }
         }
 
-        if (isRateLimitedText(body)) {
+        if (isRateLimitedText(body) || isBlockedProxyText(body)) {
           rememberError("Rate limit pada proxy");
           continue;
         }
@@ -245,7 +263,7 @@ async function fetchUpstream(url: string): Promise<string> {
         const extracted = extractJsonPayload(body);
         if (extracted) return extracted;
 
-        if (isRetryableStatus(res.status)) {
+        if (isRetryableStatus(res.status) || res.status === 403) {
           rememberError(`Proxy HTTP ${res.status}`);
           continue;
         }
@@ -931,15 +949,19 @@ export const lookupGuru = createServerFn({ method: "POST" })
         },
         signal: AbortSignal.timeout(30_000),
       });
-      return (await res.text()).trim();
+      const body = (await res.text()).trim();
+      if (!res.ok || isRateLimitedText(body) || isBlockedProxyText(body)) {
+        throw new Error(`HTTP ${res.status || 403}`);
+      }
+      return body;
     }
 
     let trimmed = "";
     let directErr = "";
     try {
       trimmed = await fetchDirect();
-      if (isRateLimitedText(trimmed)) {
-        directErr = "Jalur koneksi publik sedang dibatasi, silakan coba lagi beberapa saat lagi";
+      if (isRateLimitedText(trimmed) || isBlockedProxyText(trimmed)) {
+        directErr = normalizeLookupErrorMessage(trimmed || "HTTP 403");
         trimmed = "";
       }
     } catch (e) {
