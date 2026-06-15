@@ -162,6 +162,56 @@ function sanitizeLookupResultMessage(message: unknown, fallback: string): string
   return normalized || fallback;
 }
 
+function extractEmbeddedLookupError(payload: unknown, depth = 0): string {
+  if (payload === null || payload === undefined || depth > 4) return "";
+
+  if (typeof payload === "string") {
+    const text = payload.trim();
+    if (!text) return "";
+    return isBlockedProxyText(text) || isRateLimitedText(text)
+      ? normalizeLookupErrorMessage(text)
+      : "";
+  }
+
+  if (Array.isArray(payload)) {
+    for (const item of payload.slice(0, 8)) {
+      const found = extractEmbeddedLookupError(item, depth + 1);
+      if (found) return found;
+    }
+    return "";
+  }
+
+  if (typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    const priorityKeys = ["MESSAGE", "message", "error", "ERROR", "msg", "MSG", "detail", "DETAIL"];
+    for (const key of priorityKeys) {
+      const found = extractEmbeddedLookupError(record[key], depth + 1);
+      if (found) return found;
+    }
+
+    const nestedKeys = ["data", "result", "results", "guru", "mahasiswa", "hasil"];
+    for (const key of nestedKeys) {
+      const found = extractEmbeddedLookupError(record[key], depth + 1);
+      if (found) return found;
+    }
+  }
+
+  return "";
+}
+
+function extractEmbeddedLookupErrorFromText(raw: string): string {
+  const extracted = extractJsonPayload(raw).trim();
+  if (!extracted || (!extracted.startsWith("{") && !extracted.startsWith("["))) {
+    return "";
+  }
+
+  try {
+    return extractEmbeddedLookupError(JSON.parse(extracted));
+  } catch {
+    return "";
+  }
+}
+
 function isRetryableStatus(status: number): boolean {
   return [408, 425, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526].includes(status);
 }
@@ -214,9 +264,10 @@ async function fetchUpstream(url: string): Promise<string> {
         signal: AbortSignal.timeout(45_000),
       });
       const body = await direct.text();
+      const embeddedError = extractEmbeddedLookupErrorFromText(body);
 
-      if (isRateLimitedText(body) || isBlockedProxyText(body)) {
-        rememberError("Rate limit pada server sumber");
+      if (isRateLimitedText(body) || isBlockedProxyText(body) || embeddedError) {
+        rememberError(embeddedError || "Rate limit pada server sumber");
         continue;
       }
 
@@ -265,8 +316,10 @@ async function fetchUpstream(url: string): Promise<string> {
           }
         }
 
-        if (isRateLimitedText(body) || isBlockedProxyText(body)) {
-          rememberError("Rate limit pada proxy");
+        const embeddedError = extractEmbeddedLookupErrorFromText(body);
+
+        if (isRateLimitedText(body) || isBlockedProxyText(body) || embeddedError) {
+          rememberError(embeddedError || "Rate limit pada proxy");
           continue;
         }
 
