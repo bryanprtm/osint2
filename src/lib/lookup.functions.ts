@@ -949,15 +949,19 @@ export const lookupGuru = createServerFn({ method: "POST" })
         },
         signal: AbortSignal.timeout(30_000),
       });
-      return (await res.text()).trim();
+      const body = (await res.text()).trim();
+      if (!res.ok || isRateLimitedText(body) || isBlockedProxyText(body)) {
+        throw new Error(`HTTP ${res.status || 403}`);
+      }
+      return body;
     }
 
     let trimmed = "";
     let directErr = "";
     try {
       trimmed = await fetchDirect();
-      if (isRateLimitedText(trimmed)) {
-        directErr = "Jalur koneksi publik sedang dibatasi, silakan coba lagi beberapa saat lagi";
+      if (isRateLimitedText(trimmed) || isBlockedProxyText(trimmed)) {
+        directErr = normalizeLookupErrorMessage(trimmed || "HTTP 403");
         trimmed = "";
       }
     } catch (e) {
