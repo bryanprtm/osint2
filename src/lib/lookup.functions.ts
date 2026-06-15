@@ -154,6 +154,14 @@ function normalizeLookupErrorMessage(message: string): string {
   return text;
 }
 
+function sanitizeLookupResultMessage(message: unknown, fallback: string): string {
+  const text = typeof message === "string" ? message.trim() : "";
+  if (!text) return fallback;
+
+  const normalized = normalizeLookupErrorMessage(text);
+  return normalized || fallback;
+}
+
 function isRetryableStatus(status: number): boolean {
   return [408, 425, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526].includes(status);
 }
@@ -178,7 +186,6 @@ function buildProxyCandidates(url: string): string[] {
     `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
     `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
     `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-    `https://proxy.cors.sh/${url}`,
     `${PROXY}${url}`,
     `${PROXY}${base}`,
     `${PROXY}http://${stripped}`,
@@ -352,7 +359,10 @@ export const lookupNik2KK = createServerFn({ method: "POST" })
     }
 
     if (!json || !json.status) {
-      const msg = (json && "message" in json && json.message) || "Data tidak ditemukan";
+      const msg = sanitizeLookupResultMessage(
+        json && "message" in json ? json.message : "",
+        "Data tidak ditemukan",
+      );
       return { ok: false, message: msg, rows: [] };
     }
 
@@ -427,7 +437,10 @@ export const lookupImei = createServerFn({ method: "POST" })
     }
 
     if (isError) {
-      const msg = (json.result as string) || (json.message as string) || "IMEI tidak valid / data tidak ditemukan.";
+      const msg = sanitizeLookupResultMessage(
+        (json.result as string) || (json.message as string),
+        "IMEI tidak valid / data tidak ditemukan.",
+      );
       return { ok: false, message: msg, rows: Object.keys(row).length ? [row] : [] };
     }
 
@@ -861,10 +874,10 @@ export const lookupNopol = createServerFn({ method: "POST" })
     }).filter((r) => Object.keys(r).length);
 
     if (isError || rows.length === 0) {
-      const msg =
-        (obj.message as string) ||
-        (obj.result as string) ||
-        "Data tidak ditemukan untuk plat nomor tersebut.";
+      const msg = sanitizeLookupResultMessage(
+        (obj.message as string) || (obj.result as string),
+        "Data tidak ditemukan untuk plat nomor tersebut.",
+      );
       return { ok: false, message: msg, rows };
     }
 
@@ -920,10 +933,10 @@ export const lookupMahasiswa = createServerFn({ method: "POST" })
     }).filter((r) => Object.keys(r).length);
 
     if (isError || rows.length === 0) {
-      const msg =
-        (obj.message as string) ||
-        (obj.result as string) ||
-        "Data mahasiswa tidak ditemukan.";
+      const msg = sanitizeLookupResultMessage(
+        (obj.message as string) || (obj.result as string),
+        "Data mahasiswa tidak ditemukan.",
+      );
       return { ok: false, message: msg, rows };
     }
 
@@ -1016,10 +1029,10 @@ export const lookupGuru = createServerFn({ method: "POST" })
     }).filter((r) => Object.keys(r).length);
 
     if (isError || rows.length === 0) {
-      const msg =
-        (obj.message as string) ||
-        (obj.result as string) ||
-        "Data guru tidak ditemukan.";
+      const msg = sanitizeLookupResultMessage(
+        (obj.message as string) || (obj.result as string),
+        "Data guru tidak ditemukan.",
+      );
       return { ok: false, message: msg, rows };
     }
 
