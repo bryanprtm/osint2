@@ -322,7 +322,7 @@ export const lookupNik2KK = createServerFn({ method: "POST" })
       }
       json = JSON.parse(trimmed) as ApiResponse;
     } catch (e) {
-      const msg = (e as Error).message || String(e);
+      const msg = normalizeLookupErrorMessage((e as Error).message || String(e));
       return {
         ok: false,
         message: `Gagal menghubungi server data: ${msg}`,
@@ -385,7 +385,11 @@ export const lookupImei = createServerFn({ method: "POST" })
       }
       json = JSON.parse(trimmed) as Record<string, unknown>;
     } catch (e) {
-      return { ok: false, message: `Gagal menghubungi server data: ${(e as Error).message || String(e)}`, rows: [] };
+      return {
+        ok: false,
+        message: `Gagal menghubungi server data: ${normalizeLookupErrorMessage((e as Error).message || String(e))}`,
+        rows: [],
+      };
     }
 
     if (!json) {
@@ -806,7 +810,11 @@ export const lookupNopol = createServerFn({ method: "POST" })
       }
       json = JSON.parse(trimmed);
     } catch (e) {
-      return { ok: false, message: `Gagal menghubungi server data: ${(e as Error).message || String(e)}`, rows: [] };
+      return {
+        ok: false,
+        message: `Gagal menghubungi server data: ${normalizeLookupErrorMessage((e as Error).message || String(e))}`,
+        rows: [],
+      };
     }
 
     const obj = (Array.isArray(json) ? { data: json } : json) as Record<string, unknown>;
@@ -861,7 +869,11 @@ export const lookupMahasiswa = createServerFn({ method: "POST" })
       }
       json = JSON.parse(trimmed);
     } catch (e) {
-      return { ok: false, message: `Gagal menghubungi server data: ${(e as Error).message || String(e)}`, rows: [] };
+      return {
+        ok: false,
+        message: `Gagal menghubungi server data: ${normalizeLookupErrorMessage((e as Error).message || String(e))}`,
+        rows: [],
+      };
     }
 
     const obj = (Array.isArray(json) ? { data: json } : json) as Record<string, unknown>;
@@ -926,8 +938,12 @@ export const lookupGuru = createServerFn({ method: "POST" })
     let directErr = "";
     try {
       trimmed = await fetchDirect();
+      if (isRateLimitedText(trimmed)) {
+        directErr = "Jalur koneksi publik sedang dibatasi, silakan coba lagi beberapa saat lagi";
+        trimmed = "";
+      }
     } catch (e) {
-      directErr = (e as Error).message || String(e);
+      directErr = normalizeLookupErrorMessage((e as Error).message || String(e));
     }
 
     // Jika direct gagal atau bukan JSON, baru fallback ke proxy
@@ -935,7 +951,7 @@ export const lookupGuru = createServerFn({ method: "POST" })
       try {
         trimmed = (await fetchUpstream(url)).trim();
       } catch (e) {
-        const msg = directErr || (e as Error).message || String(e);
+        const msg = normalizeLookupErrorMessage(directErr || (e as Error).message || String(e));
         return { ok: false, message: `Gagal menghubungi server SIMPKB: ${msg}`, rows: [] };
       }
     }
