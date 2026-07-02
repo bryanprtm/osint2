@@ -220,18 +220,41 @@ export const sendWaLookup = createServerFn({ method: "POST" })
     }
 
     const success = result.ok && !/error|invalid|failed/i.test(result.text.slice(0, 200));
-    await supabaseAdmin.from("wa_send_log").insert({
+    const { data: inserted } = await supabaseAdmin.from("wa_send_log").insert({
       username: data.username ?? null,
       feature_id: data.featureId, query: q, command_sent: message,
       status: success ? "sent" : "failed",
       provider,
       provider_response: result.text.slice(0, 2000),
       error: success ? null : `HTTP ${result.status}`,
-    });
+    }).select("id").single();
+    const logId = (inserted as any)?.id as string | undefined;
 
     return success
-      ? { ok: true as const, message: `Perintah "${message}" terkirim ke ${target}.` }
-      : { ok: false as const, message: `Gateway menolak (HTTP ${result.status}): ${result.text.slice(0, 200)}` };
+      ? { ok: true as const, message: `Perintah "${message}" terkirim ke ${target}.`, logId }
+      : { ok: false as const, message: `Gateway menolak (HTTP ${result.status}): ${result.text.slice(0, 200)}`, logId };
+  });
+
+// ============= GET REPLY (polling) =============
+export const getWaReply = createServerFn({ method: "POST" })
+  .inputValidator((input: { logId: string }) =>
+    z.object({ logId: z.string().uuid() }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row, error } = await supabaseAdmin
+      .from("wa_send_log")
+      .select("id, reply, reply_at, reply_sender")
+      .eq("id", data.logId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!row) return { found: false as const };
+    return {
+      found: true as const,
+      reply: (row as any).reply as string | null,
+      reply_at: (row as any).reply_at as string | null,
+      reply_sender: (row as any).reply_sender as string | null,
+    };
   });
 
 // ============= LIST LOG =============
