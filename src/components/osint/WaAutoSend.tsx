@@ -60,6 +60,7 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
         if (r?.found && r.reply) {
           setReply(r.reply);
           setWaitingReply(false);
+          setHistoryKey((k) => k + 1);
           stopPolling();
         }
       } catch {
