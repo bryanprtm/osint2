@@ -8,7 +8,8 @@ import {
   UserPlus, Users as UsersIcon, KeyRound, Loader2, MessageCircle,
 } from "lucide-react";
 import { listUsers, createUser, updateUser, deleteUser, type AppUserRow } from "@/lib/users.functions";
-import { DEFAULT_WA_COMMANDS, loadWaConfig, saveWaConfig, sanitizePhone, type WaConfig } from "@/lib/whatsapp";
+import { getWaSettings, saveWaSettings, listWaSendLog, DEFAULT_WA_COMMANDS, type WaSettingsPublic, type WaSendLogRow, type WaProvider } from "@/lib/wa-gateway.functions";
+import { useServerFn } from "@tanstack/react-start";
 
 
 export const Route = createFileRoute("/admin")({
@@ -54,10 +55,33 @@ function AdminPage() {
   const [tgEnabled, setTgEnabled] = useState(settings.telegramEnabled);
   const [savedNote, setSavedNote] = useState("");
 
-  // --- WhatsApp bot state ---
-  const [waCfg, setWaCfg] = useState<WaConfig>({ enabled: false, phone: "", commands: { ...DEFAULT_WA_COMMANDS } });
+  // --- WhatsApp Gateway state ---
+  const [waProvider, setWaProvider] = useState<WaProvider>("fonnte");
+  const [waBotNumber, setWaBotNumber] = useState("");
+  const [waEnabled, setWaEnabled] = useState(false);
+  const [waCommands, setWaCommands] = useState<Record<string, string>>({ ...DEFAULT_WA_COMMANDS });
+  const [waToken, setWaToken] = useState("");
+  const [waHasToken, setWaHasToken] = useState(false);
   const [waNote, setWaNote] = useState("");
-  useEffect(() => { setWaCfg(loadWaConfig()); }, []);
+  const [waErr, setWaErr] = useState("");
+  const [waBusy, setWaBusy] = useState(false);
+  const [waLog, setWaLog] = useState<WaSendLogRow[]>([]);
+  const fetchWaSettings = useServerFn(getWaSettings);
+  const persistWaSettings = useServerFn(saveWaSettings);
+  const fetchWaLog = useServerFn(listWaSendLog);
+
+  const applyWaSettings = (s: WaSettingsPublic) => {
+    setWaProvider(s.provider);
+    setWaBotNumber(s.bot_number);
+    setWaEnabled(s.enabled);
+    setWaCommands({ ...DEFAULT_WA_COMMANDS, ...(s.commands ?? {}) });
+    setWaHasToken(s.has_token);
+  };
+
+  useEffect(() => {
+    void fetchWaSettings().then((r) => r?.settings && applyWaSettings(r.settings)).catch(() => {});
+    void fetchWaLog({ data: { limit: 20 } }).then((r) => setWaLog(r?.rows ?? [])).catch(() => {});
+  }, [fetchWaSettings, fetchWaLog]);
 
 
   // --- Users state ---
