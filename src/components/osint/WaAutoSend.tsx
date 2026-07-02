@@ -90,6 +90,7 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
       setMsg({ ok: !!r?.ok, text: r?.message ?? "" });
       if (r?.ok && r.logId) {
         setLogId(r.logId);
+        setHistoryKey((k) => k + 1);
         startPolling(r.logId);
       }
       if (!r?.ok) setTimeout(() => setMsg(null), 5000);
