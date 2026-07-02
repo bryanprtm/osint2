@@ -98,7 +98,14 @@ export const saveWaSettings = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const patch: Record<string, unknown> = {
+    const patch: {
+      provider: string;
+      bot_number: string;
+      enabled: boolean;
+      commands: Record<string, string>;
+      updated_at: string;
+      api_token?: string;
+    } = {
       provider: data.provider,
       bot_number: sanitizePhone(data.bot_number),
       enabled: data.enabled,
