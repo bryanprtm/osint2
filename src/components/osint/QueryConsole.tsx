@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Feature } from "@/lib/osint-data";
 import { Cpu, Search, Loader2 } from "lucide-react";
-import { WaSendButton } from "@/components/osint/WaSendButton";
+import { WaAutoSend } from "@/components/osint/WaAutoSend";
 
 
 export function QueryConsole({
@@ -63,7 +63,7 @@ export function QueryConsole({
         {loading ? "Memproses Query..." : "Verifikasi Akun"}
       </button>
 
-      <WaSendButton featureId={feature.id} query={q} />
+      <WaAutoSend featureId={feature.id} query={q} />
     </form>
   );
 }

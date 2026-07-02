@@ -3,7 +3,7 @@ import type { Feature } from "@/lib/osint-data";
 import { Cpu, Search, Loader2, RefreshCw } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getBpjsCaptcha } from "@/lib/lookup.functions";
-import { WaSendButton } from "@/components/osint/WaSendButton";
+import { WaAutoSend } from "@/components/osint/WaAutoSend";
 
 
 export function BpjsConsole({
@@ -135,7 +135,7 @@ export function BpjsConsole({
         {loading ? "Memverifikasi..." : "Verifikasi BPJS"}
       </button>
 
-      <WaSendButton featureId={feature.id} query={nik} />
+      <WaAutoSend featureId={feature.id} query={nik} />
     </form>
   );
 }
