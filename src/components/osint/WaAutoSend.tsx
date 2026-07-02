@@ -144,6 +144,8 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
           Belum menerima balasan setelah 2 menit. Cek WhatsApp Anda langsung, atau pastikan webhook incoming sudah dikonfigurasi di dashboard gateway.
         </div>
       )}
+
+      <WaHistory featureId={featureId} refreshKey={historyKey} />
     </div>
   );
 }
