@@ -5,7 +5,7 @@ import { Sidebar } from "@/components/osint/Sidebar";
 import { StatusBar } from "@/components/osint/StatusBar";
 import {
   Plus, Trash2, Pencil, Eye, EyeOff, Send, Save, ArrowLeft, RotateCcw, ShieldCheck, Check, X,
-  UserPlus, Users as UsersIcon, KeyRound, Loader2, MessageCircle,
+  UserPlus, Users as UsersIcon, KeyRound, Loader2, MessageCircle, Copy,
 } from "lucide-react";
 import { listUsers, createUser, updateUser, deleteUser, type AppUserRow } from "@/lib/users.functions";
 import { getWaSettings, saveWaSettings, listWaSendLog, getWaWebhookUrl, DEFAULT_WA_COMMANDS, type WaSettingsPublic, type WaSendLogRow, type WaProvider } from "@/lib/wa-gateway.functions";
