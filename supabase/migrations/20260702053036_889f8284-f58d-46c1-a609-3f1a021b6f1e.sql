@@ -1,0 +1,1 @@
+ALTER TABLE public.wa_gateway_settings ADD COLUMN IF NOT EXISTS subdomain TEXT NOT NULL DEFAULT ''; ALTER TABLE public.wa_gateway_settings ADD COLUMN IF NOT EXISTS secret_key TEXT NOT NULL DEFAULT '';

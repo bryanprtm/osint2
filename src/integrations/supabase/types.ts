@@ -124,6 +124,8 @@ export type Database = {
           enabled: boolean
           id: number
           provider: string
+          secret_key: string
+          subdomain: string
           updated_at: string
         }
         Insert: {
@@ -133,6 +135,8 @@ export type Database = {
           enabled?: boolean
           id?: number
           provider?: string
+          secret_key?: string
+          subdomain?: string
           updated_at?: string
         }
         Update: {
@@ -142,6 +146,8 @@ export type Database = {
           enabled?: boolean
           id?: number
           provider?: string
+          secret_key?: string
+          subdomain?: string
           updated_at?: string
         }
         Relationships: []

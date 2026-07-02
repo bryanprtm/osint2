@@ -6,9 +6,11 @@ export type WaProvider = "fonnte" | "wablas";
 export type WaSettingsPublic = {
   provider: WaProvider;
   bot_number: string;
+  subdomain: string;
   enabled: boolean;
   commands: Record<string, string>;
   has_token: boolean;
+  has_secret: boolean;
   updated_at: string;
 };
 
@@ -66,9 +68,11 @@ function toPublic(row: any): WaSettingsPublic {
   return {
     provider: (row.provider as WaProvider) ?? "fonnte",
     bot_number: row.bot_number ?? "",
+    subdomain: row.subdomain ?? "",
     enabled: !!row.enabled,
     commands: (row.commands as Record<string, string>) ?? {},
     has_token: !!(row.api_token && String(row.api_token).length > 0),
+    has_secret: !!(row.secret_key && String(row.secret_key).length > 0),
     updated_at: row.updated_at,
   };
 }
@@ -84,16 +88,20 @@ export const saveWaSettings = createServerFn({ method: "POST" })
   .inputValidator((input: {
     provider: WaProvider;
     bot_number: string;
+    subdomain?: string;
     enabled: boolean;
     commands: Record<string, string>;
     api_token?: string; // optional — empty string keeps existing
+    secret_key?: string; // optional — empty string keeps existing
   }) =>
     z.object({
       provider: z.enum(["fonnte", "wablas"]),
       bot_number: z.string().max(30),
+      subdomain: z.string().max(60).optional(),
       enabled: z.boolean(),
       commands: z.record(z.string(), z.string().max(60)),
       api_token: z.string().max(500).optional(),
+      secret_key: z.string().max(500).optional(),
     }).parse(input),
   )
   .handler(async ({ data }) => {
@@ -101,19 +109,25 @@ export const saveWaSettings = createServerFn({ method: "POST" })
     const patch: {
       provider: string;
       bot_number: string;
+      subdomain: string;
       enabled: boolean;
       commands: Record<string, string>;
       updated_at: string;
       api_token?: string;
+      secret_key?: string;
     } = {
       provider: data.provider,
       bot_number: sanitizePhone(data.bot_number),
+      subdomain: (data.subdomain ?? "").trim().toLowerCase().replace(/[^a-z0-9-]/g, ""),
       enabled: data.enabled,
       commands: data.commands,
       updated_at: new Date().toISOString(),
     };
     if (typeof data.api_token === "string" && data.api_token.trim().length > 0) {
       patch.api_token = data.api_token.trim();
+    }
+    if (typeof data.secret_key === "string" && data.secret_key.trim().length > 0) {
+      patch.secret_key = data.secret_key.trim();
     }
     const { error } = await supabaseAdmin.from("wa_gateway_settings").update(patch).eq("id", 1);
     if (error) return { ok: false as const, error: error.message };
@@ -132,19 +146,29 @@ async function sendViaFonnte(token: string, target: string, message: string) {
   return { ok: res.ok, status: res.status, text };
 }
 
-async function sendViaWablas(token: string, target: string, message: string) {
-  // Wablas: POST https://<subdomain>.wablas.com/api/send-message with Authorization: <token>
-  // We default to the common "solo" subdomain; users can encode subdomain into token as "sub|token".
-  let sub = "solo";
+async function sendViaWablas(
+  token: string,
+  secret: string,
+  subdomain: string,
+  target: string,
+  message: string,
+) {
+  // Wablas: POST https://<subdomain>.wablas.com/api/send-message
+  // Auth header is "<token>.<secret>" when secret key is configured (mode "secret key + IP whitelist").
+  // Fallback to token-only when secret is empty (device tanpa proteksi secret key).
+  let sub = (subdomain || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
   let realToken = token;
-  if (token.includes("|")) {
+  // Backward compat: dulu subdomain di-embed dalam token sebagai "sub|token".
+  if (!sub && token.includes("|")) {
     const [s, t] = token.split("|");
-    if (s) sub = s.trim();
+    if (s) sub = s.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
     if (t) realToken = t.trim();
   }
+  if (!sub) sub = "solo";
+  const auth = secret && secret.length > 0 ? `${realToken}.${secret}` : realToken;
   const res = await fetch(`https://${sub}.wablas.com/api/send-message`, {
     method: "POST",
-    headers: { Authorization: realToken, "Content-Type": "application/x-www-form-urlencoded" },
+    headers: { Authorization: auth, "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ phone: target, message }).toString(),
   });
   const text = await res.text();
@@ -183,7 +207,7 @@ export const sendWaLookup = createServerFn({ method: "POST" })
     let result: { ok: boolean; status: number; text: string };
     try {
       result = provider === "wablas"
-        ? await sendViaWablas(row.api_token, target, message)
+        ? await sendViaWablas(row.api_token, row.secret_key ?? "", row.subdomain ?? "", target, message)
         : await sendViaFonnte(row.api_token, target, message);
     } catch (e) {
       const errMsg = (e as Error).message;

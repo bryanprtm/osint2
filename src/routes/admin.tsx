@@ -58,10 +58,13 @@ function AdminPage() {
   // --- WhatsApp Gateway state ---
   const [waProvider, setWaProvider] = useState<WaProvider>("fonnte");
   const [waBotNumber, setWaBotNumber] = useState("");
+  const [waSubdomain, setWaSubdomain] = useState("");
   const [waEnabled, setWaEnabled] = useState(false);
   const [waCommands, setWaCommands] = useState<Record<string, string>>({ ...DEFAULT_WA_COMMANDS });
   const [waToken, setWaToken] = useState("");
+  const [waSecret, setWaSecret] = useState("");
   const [waHasToken, setWaHasToken] = useState(false);
+  const [waHasSecret, setWaHasSecret] = useState(false);
   const [waNote, setWaNote] = useState("");
   const [waErr, setWaErr] = useState("");
   const [waBusy, setWaBusy] = useState(false);
@@ -73,9 +76,11 @@ function AdminPage() {
   const applyWaSettings = (s: WaSettingsPublic) => {
     setWaProvider(s.provider);
     setWaBotNumber(s.bot_number);
+    setWaSubdomain(s.subdomain ?? "");
     setWaEnabled(s.enabled);
     setWaCommands({ ...DEFAULT_WA_COMMANDS, ...(s.commands ?? {}) });
     setWaHasToken(s.has_token);
+    setWaHasSecret(s.has_secret);
   };
 
   useEffect(() => {
@@ -224,9 +229,11 @@ function AdminPage() {
         data: {
           provider: waProvider,
           bot_number: waBotNumber,
+          subdomain: waSubdomain,
           enabled: waEnabled,
           commands: waCommands,
           api_token: waToken.trim() || undefined,
+          secret_key: waSecret.trim() || undefined,
         },
       });
       if (!r?.ok) {
@@ -235,6 +242,7 @@ function AdminPage() {
       }
       applyWaSettings(r.settings);
       setWaToken("");
+      setWaSecret("");
       setWaNote("Konfigurasi WhatsApp tersimpan.");
       const l = await fetchWaLog({ data: { limit: 20 } });
       setWaLog(l?.rows ?? []);
@@ -428,10 +436,23 @@ function AdminPage() {
                 />
               </div>
 
+              {waProvider === "wablas" && (
+                <div className="space-y-1">
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                    Subdomain Wablas <span className="text-muted-foreground">(mis. <span className="text-cyber">jogja</span>, <span className="text-cyber">solo</span>, <span className="text-cyber">pati</span> — bagian sebelum <span className="text-cyber">.wablas.com</span>)</span>
+                  </div>
+                  <input
+                    value={waSubdomain}
+                    onChange={(e) => setWaSubdomain(e.target.value)}
+                    placeholder="jogja"
+                    className="w-full bg-input/40 border border-border focus:border-cyber outline-none px-2 py-1.5 rounded-sm text-xs font-mono lowercase"
+                  />
+                </div>
+              )}
+
               <div className="space-y-1">
                 <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
                   API Token {waHasToken && <span className="text-success">● token tersimpan</span>}
-                  {waProvider === "wablas" && <span className="text-muted-foreground"> — untuk wablas gunakan format <span className="text-cyber">subdomain|token</span> (mis. <span className="text-cyber">solo|abcd1234</span>)</span>}
                 </div>
                 <input
                   type="password"
@@ -441,6 +462,22 @@ function AdminPage() {
                   className="w-full bg-input/40 border border-border focus:border-cyber outline-none px-2 py-1.5 rounded-sm text-xs font-mono"
                 />
               </div>
+
+              {waProvider === "wablas" && (
+                <div className="space-y-1">
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                    Secret Key Wablas {waHasSecret && <span className="text-success">● secret tersimpan</span>}
+                    <span className="text-muted-foreground"> — wajib jika device Wablas mengaktifkan proteksi <span className="text-cyber">Secret Key / IP Whitelist</span></span>
+                  </div>
+                  <input
+                    type="password"
+                    value={waSecret}
+                    onChange={(e) => setWaSecret(e.target.value)}
+                    placeholder={waHasSecret ? "•••••••• (kosongkan untuk tetap pakai secret lama)" : "Tempel Secret Key dari dashboard Wablas"}
+                    className="w-full bg-input/40 border border-border focus:border-cyber outline-none px-2 py-1.5 rounded-sm text-xs font-mono"
+                  />
+                </div>
+              )}
 
               <label className="flex items-center gap-2 text-xs pt-1">
                 <input
