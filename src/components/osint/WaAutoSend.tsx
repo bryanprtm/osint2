@@ -187,7 +187,7 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
 
       {logId && !waitingReply && !reply && msg?.ok && (
         <div className="text-[10px] font-mono text-warning px-2 py-1 border border-warning/30 rounded-sm">
-          Belum menerima balasan setelah 2 menit. Cek WhatsApp Anda langsung, atau pastikan webhook incoming sudah dikonfigurasi di dashboard gateway.
+          Belum menerima balasan setelah 5 menit. Cek WhatsApp Anda langsung, atau pastikan webhook incoming sudah dikonfigurasi di dashboard gateway.
         </div>
       )}
 
