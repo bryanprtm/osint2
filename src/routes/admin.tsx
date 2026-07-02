@@ -88,7 +88,8 @@ function AdminPage() {
   useEffect(() => {
     void fetchWaSettings().then((r) => r?.settings && applyWaSettings(r.settings)).catch(() => {});
     void fetchWaLog({ data: { limit: 20 } }).then((r) => setWaLog(r?.rows ?? [])).catch(() => {});
-  }, [fetchWaSettings, fetchWaLog]);
+    void fetchWaWebhookUrl().then((r) => setWaWebhookUrl(r?.url ?? null)).catch(() => {});
+  }, [fetchWaSettings, fetchWaLog, fetchWaWebhookUrl]);
 
 
   // --- Users state ---
