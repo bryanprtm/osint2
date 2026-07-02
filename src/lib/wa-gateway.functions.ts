@@ -69,6 +69,43 @@ function commandKeyword(command: unknown): string {
   return first.replace(/^\//, "");
 }
 
+function textIncludes(haystack: string, needle: unknown): boolean {
+  const value = String(needle ?? "").toLowerCase().trim();
+  return !!value && haystack.includes(value);
+}
+
+function scoreReplyMatch(
+  pending: { feature_id: string; command_sent: string; query: string; created_at: string },
+  message: string,
+  replyTime: number,
+): number {
+  const sentAt = new Date(pending.created_at).getTime();
+  const diffMs = replyTime - sentAt;
+  if (!Number.isFinite(sentAt) || diffMs < -5_000 || diffMs > 30 * 60 * 1000) return -1;
+
+  const lower = message.toLowerCase();
+  const queryText = String(pending.query ?? "").toLowerCase().trim();
+  const commandText = commandKeyword(pending.command_sent);
+  const featureText = String(pending.feature_id ?? "").toLowerCase().trim();
+  const recency = Math.max(0, 30 * 60 * 1000 - diffMs) / 1000;
+
+  if (queryText && lower.includes(queryText)) return 10_000 + queryText.length * 100 + recency;
+  if (commandText && lower.includes(commandText)) return 5_000 + commandText.length * 50 + recency;
+  if (featureText && lower.includes(featureText)) return 3_000 + featureText.length * 25 + recency;
+  return 100 + recency;
+}
+
+function pickBestPendingForReply<T extends { feature_id: string; command_sent: string; query: string; created_at: string }>(
+  pending: T[],
+  message: string,
+  replyTime: number,
+): T | undefined {
+  return pending
+    .map((row) => ({ row, score: scoreReplyMatch(row, message, replyTime) }))
+    .filter(({ score }) => score >= 0)
+    .sort((a, b) => b.score - a.score || new Date(b.row.created_at).getTime() - new Date(a.row.created_at).getTime())[0]?.row;
+}
+
 async function reconcileUnmatchedWaReplies(logId?: string, featureId?: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: setting } = await supabaseAdmin
@@ -121,22 +158,11 @@ async function reconcileUnmatchedWaReplies(logId?: string, featureId?: string) {
     .filter(({ meta }) => !meta.isGroup && meta.message && (numberMatches(meta.chatPhone, botNumber) || numberMatches(meta.sender, botNumber) || meta.fromMe));
 
   let updated = 0;
-  const usedIncomingIds = new Set<string>();
-  for (const p of pending) {
-    const sentAt = new Date(p.created_at).getTime();
-    const candidates = incoming.filter(({ row, time }) => {
-      return !usedIncomingIds.has(row.id) && time >= sentAt - 5_000 && time <= sentAt + 30 * 60 * 1000;
-    });
-    if (candidates.length === 0) continue;
-
-    const queryText = String(p.query ?? "").toLowerCase().trim();
-    const commandText = commandKeyword(p.command_sent);
-    const featureText = String(p.feature_id ?? "").toLowerCase().trim();
-    let hit = queryText ? candidates.find(({ meta }) => meta.message.toLowerCase().includes(queryText)) : undefined;
-    if (!hit && commandText) hit = candidates.find(({ meta }) => meta.message.toLowerCase().includes(commandText));
-    if (!hit && featureText) hit = candidates.find(({ meta }) => meta.message.toLowerCase().includes(featureText));
-    if (!hit) hit = candidates[0];
-    if (!hit) continue;
+  const usedPendingIds = new Set<string>();
+  for (const hit of incoming) {
+    const availablePending = pending.filter((p) => !usedPendingIds.has(p.id));
+    const p = pickBestPendingForReply(availablePending, hit.meta.message, hit.time);
+    if (!p) continue;
 
     const replyAt = new Date(hit.time).toISOString();
     const replySender = hit.meta.chatPhone || hit.meta.sender;
@@ -147,7 +173,7 @@ async function reconcileUnmatchedWaReplies(logId?: string, featureId?: string) {
       .is("reply", null);
     if (updateError) throw new Error(updateError.message);
     await supabaseAdmin.from("wa_incoming").update({ matched_log_id: p.id }).eq("id", hit.row.id);
-    usedIncomingIds.add(hit.row.id);
+    usedPendingIds.add(p.id);
     updated += 1;
   }
   return { updated };
