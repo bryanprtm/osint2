@@ -3,6 +3,8 @@ import type { Feature } from "@/lib/osint-data";
 import { Cpu, Search, Loader2, RefreshCw } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getBpjsCaptcha } from "@/lib/lookup.functions";
+import { WaSendButton } from "@/components/osint/WaSendButton";
+
 
 export function BpjsConsole({
   feature,
