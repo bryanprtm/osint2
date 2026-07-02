@@ -69,7 +69,7 @@ function commandKeyword(command: unknown): string {
   return first.replace(/^\//, "");
 }
 
-async function reconcileUnmatchedWaReplies(logId?: string) {
+async function reconcileUnmatchedWaReplies(logId?: string, featureId?: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: setting } = await supabaseAdmin
     .from("wa_gateway_settings")
@@ -90,8 +90,9 @@ async function reconcileUnmatchedWaReplies(logId?: string) {
     pendingQuery = pendingQuery.eq("id", logId).limit(1);
   } else {
     pendingQuery = pendingQuery
-      .gte("created_at", new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString())
+      .gte("created_at", new Date(Date.now() - 45 * 60 * 1000).toISOString())
       .limit(100);
+    if (featureId) pendingQuery = pendingQuery.eq("feature_id", featureId);
   }
 
   const { data: pendingRows, error: pendingError } = await pendingQuery;
@@ -416,7 +417,7 @@ export const listMyWaHistory = createServerFn({ method: "POST" })
     }).parse(input ?? {}),
   )
   .handler(async ({ data }) => {
-    await reconcileUnmatchedWaReplies();
+    await reconcileUnmatchedWaReplies(undefined, data.featureId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     let q = supabaseAdmin
       .from("wa_send_log")
