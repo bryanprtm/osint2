@@ -18,6 +18,7 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
   const [reply, setReply] = useState<string | null>(null);
   const [waitingReply, setWaitingReply] = useState(false);
   const [waitElapsed, setWaitElapsed] = useState(0);
+  const [historyKey, setHistoryKey] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
