@@ -125,18 +125,39 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
     }
   };
 
+  // Lock jika ada pending milik user (di modul manapun), kecuali pending itu milik pengiriman kita sendiri
+  const locked = !!pending && pending.logId !== logId;
+  const lockAgeSec = pending ? Math.max(0, Math.floor((Date.now() - new Date(pending.created_at).getTime()) / 1000)) : 0;
+
   return (
     <div className="space-y-1.5">
       <button
         type="button"
         onClick={handle}
-        disabled={sending || waitingReply || !query.trim()}
+        disabled={sending || waitingReply || locked || !query.trim()}
         className="w-full flex items-center justify-center gap-2 py-2 rounded-sm border border-success/50 text-success hover:bg-success/10 transition-colors font-mono uppercase tracking-wider text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-        title={`Kirim "${cmd} ${query}" ke ${settings.bot_number}`}
+        title={locked ? `Menunggu balasan bot untuk "${pending!.command}"` : `Kirim "${cmd} ${query}" ke ${settings.bot_number}`}
       >
-        {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5" />}
-        {sending ? "Mengirim..." : waitingReply ? `Menunggu balasan bot... (${waitElapsed}s)` : "Kirim ke Bot WhatsApp"}
+        {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : locked ? <Lock className="w-3.5 h-3.5" /> : <MessageCircle className="w-3.5 h-3.5" />}
+        {sending
+          ? "Mengirim..."
+          : waitingReply
+            ? `Menunggu balasan bot... (${waitElapsed}s)`
+            : locked
+              ? `Terkunci — tunggu balasan bot (${lockAgeSec}s)`
+              : "Kirim ke Bot WhatsApp"}
       </button>
+
+      {locked && (
+        <div className="text-[10px] font-mono text-warning bg-warning/10 border border-warning/30 px-2 py-1 rounded-sm">
+          <div className="flex items-center gap-1.5">
+            <Lock className="w-3 h-3 shrink-0" />
+            <span className="break-words">
+              Ada permintaan sebelumnya yang masih menunggu balasan bot: <b>{pending!.command}</b>. Tombol kirim dinonaktifkan sampai balasan diterima atau timeout 2 menit tercapai.
+            </span>
+          </div>
+        </div>
+      )}
 
       {msg && !reply && (
         <div className={`flex items-start gap-1.5 text-[10px] font-mono px-2 py-1 rounded-sm ${msg.ok ? "text-success bg-success/10 border border-success/30" : "text-destructive bg-destructive/10 border border-destructive/30"}`}>
@@ -150,6 +171,7 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
           Bot sedang memproses perintah. Balasan akan muncul otomatis di sini bila webhook sudah aktif di dashboard gateway.
         </div>
       )}
+
 
       {reply && (
         <div className="border border-primary/40 bg-primary/5 rounded-sm">
