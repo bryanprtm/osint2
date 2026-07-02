@@ -399,27 +399,54 @@ function AdminPage() {
               </div>
             </div>
 
-            {/* === WHATSAPP BOT === */}
-            <h2 className="text-xs font-mono uppercase tracking-[0.3em] text-cyber pt-2">▸ Integrasi WhatsApp Bot</h2>
+            {/* === WHATSAPP GATEWAY === */}
+            <h2 className="text-xs font-mono uppercase tracking-[0.3em] text-cyber pt-2">▸ Integrasi WhatsApp Gateway</h2>
             <div className="panel-frame corner-brackets rounded-sm p-4 space-y-3">
               <div className="flex items-center gap-2 text-cyber pb-2 border-b border-border">
                 <MessageCircle className="w-4 h-4" />
-                <span className="text-xs font-mono uppercase tracking-[0.25em]">Bot WhatsApp (Deep Link)</span>
+                <span className="text-xs font-mono uppercase tracking-[0.25em]">Gateway API (Fonnte / Wablas)</span>
               </div>
 
-              <Field
-                label="Nomor Bot WhatsApp (format internasional, tanpa +)"
-                value={waCfg.phone}
-                onChange={(v) => setWaCfg({ ...waCfg, phone: v })}
-                placeholder="628123456789"
-                mono full
-              />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Provider</div>
+                  <select
+                    value={waProvider}
+                    onChange={(e) => setWaProvider(e.target.value as WaProvider)}
+                    className="w-full bg-input/40 border border-border focus:border-cyber outline-none px-2 py-1.5 rounded-sm text-xs font-mono"
+                  >
+                    <option value="fonnte">Fonnte (fonnte.com)</option>
+                    <option value="wablas">Wablas (wablas.com)</option>
+                  </select>
+                </div>
+                <Field
+                  label="Nomor Bot (contoh 628123456789)"
+                  value={waBotNumber}
+                  onChange={setWaBotNumber}
+                  placeholder="628123456789"
+                  mono full
+                />
+              </div>
+
+              <div className="space-y-1">
+                <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                  API Token {waHasToken && <span className="text-success">● token tersimpan</span>}
+                  {waProvider === "wablas" && <span className="text-muted-foreground"> — untuk wablas gunakan format <span className="text-cyber">subdomain|token</span> (mis. <span className="text-cyber">solo|abcd1234</span>)</span>}
+                </div>
+                <input
+                  type="password"
+                  value={waToken}
+                  onChange={(e) => setWaToken(e.target.value)}
+                  placeholder={waHasToken ? "•••••••• (kosongkan untuk tetap pakai token lama)" : "Tempel token API di sini"}
+                  className="w-full bg-input/40 border border-border focus:border-cyber outline-none px-2 py-1.5 rounded-sm text-xs font-mono"
+                />
+              </div>
 
               <label className="flex items-center gap-2 text-xs pt-1">
                 <input
                   type="checkbox"
-                  checked={waCfg.enabled}
-                  onChange={(e) => setWaCfg({ ...waCfg, enabled: e.target.checked })}
+                  checked={waEnabled}
+                  onChange={(e) => setWaEnabled(e.target.checked)}
                 />
                 <span className="font-mono tracking-wider text-muted-foreground">
                   AKTIFKAN TOMBOL "KIRIM KE BOT WHATSAPP" DI MODUL
@@ -437,7 +464,7 @@ function AdminPage() {
                         {m.name}
                       </div>
                       <input
-                        value={waCfg.commands[m.id] ?? ""}
+                        value={waCommands[m.id] ?? ""}
                         onChange={(e) => setWaCommand(m.id, e.target.value)}
                         placeholder="/perintah"
                         className="w-full bg-input/40 border border-border focus:border-cyber outline-none px-2 py-1 rounded-sm text-xs font-mono"
@@ -451,8 +478,8 @@ function AdminPage() {
                 </div>
               </div>
 
-              <button onClick={saveWhatsapp} className="w-full flex items-center justify-center gap-2 py-2 rounded-sm bg-cyber text-primary-foreground font-semibold tracking-wider text-xs glow-cyber hover:bg-cyber-glow uppercase">
-                <Save className="w-3.5 h-3.5" /> Simpan Konfigurasi WA
+              <button onClick={saveWhatsapp} disabled={waBusy} className="w-full flex items-center justify-center gap-2 py-2 rounded-sm bg-cyber text-primary-foreground font-semibold tracking-wider text-xs glow-cyber hover:bg-cyber-glow uppercase disabled:opacity-50">
+                <Save className="w-3.5 h-3.5" /> {waBusy ? "Menyimpan..." : "Simpan Konfigurasi WA"}
               </button>
 
               {waNote && (
@@ -460,13 +487,35 @@ function AdminPage() {
                   <Check className="w-3.5 h-3.5" /> {waNote}
                 </div>
               )}
+              {waErr && (
+                <div className="flex items-center gap-2 text-[11px] text-destructive border border-destructive/30 bg-destructive/10 px-2 py-1.5 rounded-sm">
+                  ⚠ {waErr}
+                </div>
+              )}
 
-              <div className="text-[10px] font-mono text-muted-foreground border-t border-border pt-2 leading-relaxed">
-                <div>1. Admin scan sekali di WhatsApp Web / WhatsApp Desktop pada perangkat ini.</div>
-                <div>2. User klik tombol <span className="text-success">Kirim ke Bot WhatsApp</span> pada modul → WhatsApp Web terbuka dengan perintah sudah terisi.</div>
-                <div>3. Tinggal tekan <span className="text-cyber">Enter</span> untuk mengirim ke bot dan lihat balasannya.</div>
-                <div className="pt-1 opacity-70">Konfigurasi disimpan di browser (localStorage) admin ini.</div>
+              <div className="text-[10px] font-mono text-muted-foreground border-t border-border pt-2 leading-relaxed space-y-0.5">
+                <div>1. Daftar di <span className="text-cyber">fonnte.com</span> atau <span className="text-cyber">wablas.com</span>, scan QR sekali di dashboard provider untuk menautkan nomor bot.</div>
+                <div>2. Salin API token dari dashboard provider ke form di atas, isi nomor bot & simpan.</div>
+                <div>3. User klik <span className="text-success">Kirim ke Bot WhatsApp</span> pada modul → chat otomatis terkirim ke bot dan balasan diterima di WhatsApp user/operator.</div>
               </div>
+
+              {/* Send log */}
+              {waLog.length > 0 && (
+                <div className="pt-3 mt-2 border-t border-border space-y-1.5">
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Log Pengiriman Terakhir</div>
+                  <div className="max-h-48 overflow-auto space-y-1">
+                    {waLog.map((l) => (
+                      <div key={l.id} className="text-[10px] font-mono flex items-center gap-2 border border-border/60 rounded-sm px-2 py-1">
+                        <span className={l.status === "sent" ? "text-success" : "text-destructive"}>●</span>
+                        <span className="text-muted-foreground shrink-0">{new Date(l.created_at).toLocaleTimeString()}</span>
+                        <span className="text-cyber shrink-0">{l.username ?? "-"}</span>
+                        <span className="truncate flex-1" title={l.command_sent}>{l.command_sent}</span>
+                        <span className="text-muted-foreground shrink-0">{l.provider}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* === USERS MANAGEMENT === */}
