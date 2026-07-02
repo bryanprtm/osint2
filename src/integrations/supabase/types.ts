@@ -152,6 +152,41 @@ export type Database = {
         }
         Relationships: []
       }
+      wa_incoming: {
+        Row: {
+          created_at: string
+          id: string
+          matched_log_id: string | null
+          message: string
+          raw: Json | null
+          sender: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          matched_log_id?: string | null
+          message?: string
+          raw?: Json | null
+          sender?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          matched_log_id?: string | null
+          message?: string
+          raw?: Json | null
+          sender?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wa_incoming_matched_log_id_fkey"
+            columns: ["matched_log_id"]
+            isOneToOne: false
+            referencedRelation: "wa_send_log"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       wa_send_log: {
         Row: {
           command_sent: string
@@ -162,6 +197,9 @@ export type Database = {
           provider: string
           provider_response: string | null
           query: string
+          reply: string | null
+          reply_at: string | null
+          reply_sender: string | null
           status: string
           user_id: string | null
           username: string | null
@@ -175,6 +213,9 @@ export type Database = {
           provider?: string
           provider_response?: string | null
           query: string
+          reply?: string | null
+          reply_at?: string | null
+          reply_sender?: string | null
           status?: string
           user_id?: string | null
           username?: string | null
@@ -188,6 +229,9 @@ export type Database = {
           provider?: string
           provider_response?: string | null
           query?: string
+          reply?: string | null
+          reply_at?: string | null
+          reply_sender?: string | null
           status?: string
           user_id?: string | null
           username?: string | null
