@@ -465,7 +465,7 @@ export const getWaPending = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await reconcileUnmatchedWaReplies();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const since = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    const since = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     let q = supabaseAdmin
       .from("wa_send_log")
       .select("id, feature_id, query, command_sent, created_at")
