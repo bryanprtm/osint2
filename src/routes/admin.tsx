@@ -69,9 +69,11 @@ function AdminPage() {
   const [waErr, setWaErr] = useState("");
   const [waBusy, setWaBusy] = useState(false);
   const [waLog, setWaLog] = useState<WaSendLogRow[]>([]);
+  const [waWebhookUrl, setWaWebhookUrl] = useState<string | null>(null);
   const fetchWaSettings = useServerFn(getWaSettings);
   const persistWaSettings = useServerFn(saveWaSettings);
   const fetchWaLog = useServerFn(listWaSendLog);
+  const fetchWaWebhookUrl = useServerFn(getWaWebhookUrl);
 
   const applyWaSettings = (s: WaSettingsPublic) => {
     setWaProvider(s.provider);
