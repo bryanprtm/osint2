@@ -27,12 +27,18 @@ function addAliases(keys: Set<string>, value: unknown) {
   if (raw === "mahasiswa") keys.add("mhs");
   if (raw === "simpkb") keys.add("guru");
   if (raw === "guru") keys.add("simpkb");
-  if (raw === "cp" || raw === "msisdn") {
+  if (raw === "cp" || raw === "msisdn" || raw === "data") {
     keys.add("cp");
     keys.add("msisdn");
     keys.add("phone");
+    keys.add("data");
   }
-}
+  if (raw === "nkes" || raw === "bpjs") {
+    keys.add("nkes");
+    keys.add("bpjs");
+    keys.add("nik");
+  }
+
 
 function candidateKeys(candidate: WaReplyCandidate): Set<string> {
   const keys = new Set<string>();
