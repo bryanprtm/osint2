@@ -31,6 +31,7 @@ function scoreReplyMatch(
   pending: { feature_id: string; command_sent: string; query: string; created_at: string },
   message: string,
   replyTime: number,
+  allowTimeFallback: boolean,
 ): number {
   const sentAt = new Date(pending.created_at).getTime();
   const diffMs = replyTime - sentAt;
@@ -45,6 +46,7 @@ function scoreReplyMatch(
   if (queryText && lower.includes(queryText)) return 10_000 + queryText.length * 100 + recency;
   if (commandText && lower.includes(commandText)) return 5_000 + commandText.length * 50 + recency;
   if (featureText && lower.includes(featureText)) return 3_000 + featureText.length * 25 + recency;
+  if (!allowTimeFallback) return -1;
   return 100 + recency;
 }
 
@@ -52,9 +54,10 @@ function pickBestPendingForReply<T extends { feature_id: string; command_sent: s
   pending: T[],
   message: string,
   replyTime: number,
+  allowTimeFallback: boolean,
 ): T | undefined {
   return pending
-    .map((row) => ({ row, score: scoreReplyMatch(row, message, replyTime) }))
+    .map((row) => ({ row, score: scoreReplyMatch(row, message, replyTime, allowTimeFallback) }))
     .filter(({ score }) => score >= 0)
     .sort((a, b) => b.score - a.score || new Date(b.row.created_at).getTime() - new Date(a.row.created_at).getTime())[0]?.row;
 }
@@ -160,7 +163,7 @@ export const Route = createFileRoute("/api/public/wa/incoming")({
 
           const pending = (pendingAll ?? []) as Array<{ id: string; feature_id: string; command_sent: string; query: string; created_at: string }>;
           if (pending.length > 0) {
-            const hit = pickBestPendingForReply(pending, message, Date.now());
+            const hit = pickBestPendingForReply(pending, message, Date.now(), isDirectBotReply);
             if (hit) {
               const lower = message.toLowerCase();
               if (String(hit.query ?? "").trim() && lower.includes(String(hit.query).toLowerCase().trim())) {
