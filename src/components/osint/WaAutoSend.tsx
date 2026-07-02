@@ -20,16 +20,39 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
   const [waitingReply, setWaitingReply] = useState(false);
   const [waitElapsed, setWaitElapsed] = useState(0);
   const [historyKey, setHistoryKey] = useState(0);
+  const [pending, setPending] = useState<{ logId: string; featureId: string; query: string; command: string; created_at: string } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useServerFn(getWaSettings);
   const send = useServerFn(sendWaLookup);
   const fetchReply = useServerFn(getWaReply);
+  const fetchPending = useServerFn(getWaPending);
 
   useEffect(() => {
     void load().then((r) => setSettings(r?.settings ?? null)).catch(() => setSettings(null));
   }, [load]);
+
+  // Cek lock global: apakah ada permintaan lain yang belum dibalas bot
+  useEffect(() => {
+    if (!user?.username) return;
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const r = await fetchPending({ data: { username: user.username } });
+        if (cancelled) return;
+        setPending(r?.pending ? { logId: r.logId, featureId: r.featureId, query: r.query, command: r.command, created_at: r.created_at } : null);
+      } catch { /* ignore */ }
+    };
+    void check();
+    pendingRef.current = setInterval(check, 4000);
+    return () => {
+      cancelled = true;
+      if (pendingRef.current) { clearInterval(pendingRef.current); pendingRef.current = null; }
+    };
+  }, [fetchPending, user?.username, historyKey]);
+
 
   // Reset saat query berubah (user cari data lain)
   useEffect(() => {
