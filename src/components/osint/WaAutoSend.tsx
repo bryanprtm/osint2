@@ -108,7 +108,7 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
         onClick={handle}
         disabled={sending || waitingReply || !query.trim()}
         className="w-full flex items-center justify-center gap-2 py-2 rounded-sm border border-success/50 text-success hover:bg-success/10 transition-colors font-mono uppercase tracking-wider text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-        title={`Kirim "${cmd}${query}" ke ${settings.bot_number}`}
+        title={`Kirim "${cmd} ${query}" ke ${settings.bot_number}`}
       >
         {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5" />}
         {sending ? "Mengirim..." : waitingReply ? `Menunggu balasan bot... (${waitElapsed}s)` : "Kirim ke Bot WhatsApp"}
