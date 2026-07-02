@@ -38,8 +38,119 @@ export const DEFAULT_WA_COMMANDS: Record<string, string> = {
   guru: "/guru",
 };
 
-function sanitizePhone(v: string): string {
-  return (v || "").replace(/\D+/g, "");
+function sanitizePhone(v: unknown): string {
+  return String(v ?? "").replace(/\D+/g, "");
+}
+
+function boolish(v: unknown): boolean {
+  return v === true || v === "true" || v === 1 || v === "1";
+}
+
+function numberMatches(a: unknown, b: unknown): boolean {
+  const aa = sanitizePhone(a);
+  const bb = sanitizePhone(b);
+  return !!aa && !!bb && (aa === bb || aa.endsWith(bb) || bb.endsWith(aa));
+}
+
+function incomingMeta(row: any) {
+  const raw = row?.raw && typeof row.raw === "object" ? row.raw : {};
+  const d = raw?.data && typeof raw.data === "object" ? raw.data : raw;
+  return {
+    sender: sanitizePhone(row?.sender ?? d?.sender ?? d?.from ?? raw?.sender ?? raw?.from),
+    chatPhone: sanitizePhone(d?.phone ?? raw?.phone ?? d?.pushName ?? raw?.pushName),
+    message: String(row?.message ?? d?.message ?? d?.body ?? d?.text ?? raw?.message ?? "").trim(),
+    isGroup: boolish(d?.isGroup ?? raw?.isGroup),
+    fromMe: boolish(d?.isFromMe ?? d?.fromMe ?? d?.from_me ?? raw?.isFromMe ?? raw?.fromMe),
+  };
+}
+
+function commandKeyword(command: unknown): string {
+  const first = String(command ?? "").toLowerCase().split(/\s+/)[0] ?? "";
+  return first.replace(/^\//, "");
+}
+
+async function reconcileUnmatchedWaReplies(logId?: string, featureId?: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: setting } = await supabaseAdmin
+    .from("wa_gateway_settings")
+    .select("bot_number")
+    .eq("id", 1)
+    .maybeSingle();
+  const botNumber = sanitizePhone((setting as any)?.bot_number);
+  if (!botNumber) return { updated: 0 };
+
+  let pendingQuery = supabaseAdmin
+    .from("wa_send_log")
+    .select("id, feature_id, command_sent, query, created_at")
+    .eq("status", "sent")
+    .is("reply", null)
+    .order("created_at", { ascending: true });
+
+  if (logId) {
+    pendingQuery = pendingQuery.eq("id", logId).limit(1);
+  } else {
+    pendingQuery = pendingQuery
+      .gte("created_at", new Date(Date.now() - 45 * 60 * 1000).toISOString())
+      .limit(100);
+    if (featureId) pendingQuery = pendingQuery.eq("feature_id", featureId);
+  }
+
+  const { data: pendingRows, error: pendingError } = await pendingQuery;
+  if (pendingError) throw new Error(pendingError.message);
+  const pending = (pendingRows ?? []) as Array<{
+    id: string;
+    feature_id: string;
+    command_sent: string;
+    query: string;
+    created_at: string;
+  }>;
+  if (pending.length === 0) return { updated: 0 };
+
+  const earliestMs = Math.min(...pending.map((p) => new Date(p.created_at).getTime()));
+  const { data: incomingRows, error: incomingError } = await supabaseAdmin
+    .from("wa_incoming")
+    .select("id, sender, message, created_at, raw")
+    .is("matched_log_id", null)
+    .gte("created_at", new Date(earliestMs - 5_000).toISOString())
+    .order("created_at", { ascending: true })
+    .limit(300);
+  if (incomingError) throw new Error(incomingError.message);
+
+  const incoming = ((incomingRows ?? []) as Array<any>)
+    .map((row) => ({ row, meta: incomingMeta(row), time: new Date(row.created_at).getTime() }))
+    .filter(({ meta }) => !meta.isGroup && meta.message && (numberMatches(meta.chatPhone, botNumber) || numberMatches(meta.sender, botNumber) || meta.fromMe));
+
+  let updated = 0;
+  const usedIncomingIds = new Set<string>();
+  for (const p of pending) {
+    const sentAt = new Date(p.created_at).getTime();
+    const candidates = incoming.filter(({ row, time }) => {
+      return !usedIncomingIds.has(row.id) && time >= sentAt - 5_000 && time <= sentAt + 30 * 60 * 1000;
+    });
+    if (candidates.length === 0) continue;
+
+    const queryText = String(p.query ?? "").toLowerCase().trim();
+    const commandText = commandKeyword(p.command_sent);
+    const featureText = String(p.feature_id ?? "").toLowerCase().trim();
+    let hit = queryText ? candidates.find(({ meta }) => meta.message.toLowerCase().includes(queryText)) : undefined;
+    if (!hit && commandText) hit = candidates.find(({ meta }) => meta.message.toLowerCase().includes(commandText));
+    if (!hit && featureText) hit = candidates.find(({ meta }) => meta.message.toLowerCase().includes(featureText));
+    if (!hit) hit = candidates[0];
+    if (!hit) continue;
+
+    const replyAt = new Date(hit.time).toISOString();
+    const replySender = hit.meta.chatPhone || hit.meta.sender;
+    const { error: updateError } = await supabaseAdmin
+      .from("wa_send_log")
+      .update({ reply: hit.meta.message, reply_at: replyAt, reply_sender: replySender })
+      .eq("id", p.id)
+      .is("reply", null);
+    if (updateError) throw new Error(updateError.message);
+    await supabaseAdmin.from("wa_incoming").update({ matched_log_id: p.id }).eq("id", hit.row.id);
+    usedIncomingIds.add(hit.row.id);
+    updated += 1;
+  }
+  return { updated };
 }
 
 function sanitizeQuery(featureId: string, q: string): string {
@@ -251,6 +362,7 @@ export const getWaReply = createServerFn({ method: "POST" })
     z.object({ logId: z.string().uuid() }).parse(input),
   )
   .handler(async ({ data }) => {
+    await reconcileUnmatchedWaReplies(data.logId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error } = await supabaseAdmin
       .from("wa_send_log")
@@ -305,6 +417,7 @@ export const listMyWaHistory = createServerFn({ method: "POST" })
     }).parse(input ?? {}),
   )
   .handler(async ({ data }) => {
+    await reconcileUnmatchedWaReplies(undefined, data.featureId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     let q = supabaseAdmin
       .from("wa_send_log")

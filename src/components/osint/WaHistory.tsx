@@ -26,6 +26,14 @@ export function WaHistory({ featureId, refreshKey }: { featureId: string; refres
 
   useEffect(() => { void load(); }, [load, refreshKey]);
 
+  useEffect(() => {
+    if (!user?.username) return;
+    const hasPendingReply = rows.some((r) => r.status === "sent" && !r.reply);
+    if (!hasPendingReply) return;
+    const timer = window.setInterval(() => { void load(); }, 5000);
+    return () => window.clearInterval(timer);
+  }, [load, rows, user?.username]);
+
   if (!user?.username) return null;
 
   return (
