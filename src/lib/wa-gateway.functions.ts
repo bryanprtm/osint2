@@ -146,19 +146,29 @@ async function sendViaFonnte(token: string, target: string, message: string) {
   return { ok: res.ok, status: res.status, text };
 }
 
-async function sendViaWablas(token: string, target: string, message: string) {
-  // Wablas: POST https://<subdomain>.wablas.com/api/send-message with Authorization: <token>
-  // We default to the common "solo" subdomain; users can encode subdomain into token as "sub|token".
-  let sub = "solo";
+async function sendViaWablas(
+  token: string,
+  secret: string,
+  subdomain: string,
+  target: string,
+  message: string,
+) {
+  // Wablas: POST https://<subdomain>.wablas.com/api/send-message
+  // Auth header is "<token>.<secret>" when secret key is configured (mode "secret key + IP whitelist").
+  // Fallback to token-only when secret is empty (device tanpa proteksi secret key).
+  let sub = (subdomain || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
   let realToken = token;
-  if (token.includes("|")) {
+  // Backward compat: dulu subdomain di-embed dalam token sebagai "sub|token".
+  if (!sub && token.includes("|")) {
     const [s, t] = token.split("|");
-    if (s) sub = s.trim();
+    if (s) sub = s.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
     if (t) realToken = t.trim();
   }
+  if (!sub) sub = "solo";
+  const auth = secret && secret.length > 0 ? `${realToken}.${secret}` : realToken;
   const res = await fetch(`https://${sub}.wablas.com/api/send-message`, {
     method: "POST",
-    headers: { Authorization: realToken, "Content-Type": "application/x-www-form-urlencoded" },
+    headers: { Authorization: auth, "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ phone: target, message }).toString(),
   });
   const text = await res.text();
