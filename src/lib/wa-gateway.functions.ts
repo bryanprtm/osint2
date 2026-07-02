@@ -68,9 +68,11 @@ function toPublic(row: any): WaSettingsPublic {
   return {
     provider: (row.provider as WaProvider) ?? "fonnte",
     bot_number: row.bot_number ?? "",
+    subdomain: row.subdomain ?? "",
     enabled: !!row.enabled,
     commands: (row.commands as Record<string, string>) ?? {},
     has_token: !!(row.api_token && String(row.api_token).length > 0),
+    has_secret: !!(row.secret_key && String(row.secret_key).length > 0),
     updated_at: row.updated_at,
   };
 }
