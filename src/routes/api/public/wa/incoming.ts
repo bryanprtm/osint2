@@ -22,6 +22,46 @@ function boolish(v: unknown): boolean {
   return v === true || v === "true" || v === 1 || v === "1";
 }
 
+function commandKeyword(command: unknown): string {
+  const first = String(command ?? "").toLowerCase().split(/\s+/)[0] ?? "";
+  return first.replace(/^\//, "");
+}
+
+function scoreReplyMatch(
+  pending: { feature_id: string; command_sent: string; query: string; created_at: string },
+  message: string,
+  replyTime: number,
+  allowTimeFallback: boolean,
+): number {
+  const sentAt = new Date(pending.created_at).getTime();
+  const diffMs = replyTime - sentAt;
+  if (!Number.isFinite(sentAt) || diffMs < -5_000 || diffMs > 30 * 60 * 1000) return -1;
+
+  const lower = message.toLowerCase();
+  const queryText = String(pending.query ?? "").toLowerCase().trim();
+  const commandText = commandKeyword(pending.command_sent);
+  const featureText = String(pending.feature_id ?? "").toLowerCase().trim();
+  const recency = Math.max(0, 30 * 60 * 1000 - diffMs) / 1000;
+
+  if (queryText && lower.includes(queryText)) return 10_000 + queryText.length * 100 + recency;
+  if (commandText && lower.includes(commandText)) return 5_000 + commandText.length * 50 + recency;
+  if (featureText && lower.includes(featureText)) return 3_000 + featureText.length * 25 + recency;
+  if (!allowTimeFallback) return -1;
+  return 100 + recency;
+}
+
+function pickBestPendingForReply<T extends { feature_id: string; command_sent: string; query: string; created_at: string }>(
+  pending: T[],
+  message: string,
+  replyTime: number,
+  allowTimeFallback: boolean,
+): T | undefined {
+  return pending
+    .map((row) => ({ row, score: scoreReplyMatch(row, message, replyTime, allowTimeFallback) }))
+    .filter(({ score }) => score >= 0)
+    .sort((a, b) => b.score - a.score || new Date(b.row.created_at).getTime() - new Date(a.row.created_at).getTime())[0]?.row;
+}
+
 /**
  * Extract sender + message + isFromBot from Wablas / Fonnte webhook payload.
  * Wablas payload variants (both flat & nested "data"):
@@ -121,34 +161,22 @@ export const Route = createFileRoute("/api/public/wa/incoming")({
             .order("created_at", { ascending: true })
             .limit(30);
 
-          const pending = (pendingAll ?? []) as Array<{ id: string; feature_id: string; command_sent: string; query: string }>;
+          const pending = (pendingAll ?? []) as Array<{ id: string; feature_id: string; command_sent: string; query: string; created_at: string }>;
           if (pending.length > 0) {
-            const lower = message.toLowerCase();
-            // 1) match berdasarkan nilai query (NIK/KK/nama) muncul di balasan — paling akurat
-            let hit = pending.find((p) => p.query && lower.includes(String(p.query).toLowerCase()));
-            if (hit) matchReason = "query_in_message";
-            // 2) match berdasarkan prefix command
-            if (!hit) {
-              hit = pending.find((p) => {
-                const cmd = String(p.command_sent ?? "").toLowerCase().split(/\s+/)[0] ?? "";
-                const cmdClean = cmd.replace(/^\//, "");
-                return cmdClean && lower.includes(cmdClean);
-              });
-              if (hit) matchReason = "command_prefix";
-            }
-            // 3) match berdasarkan feature_id keyword
-            if (!hit) {
-              hit = pending.find((p) => {
-                const fid = String(p.feature_id ?? "").toLowerCase();
-                return fid && lower.includes(fid);
-              });
-              if (hit) matchReason = "feature_keyword";
-            }
-            // 4) fallback: balasan direct dari nomor bot → ambil pending tertua yang belum terjawab.
-            // Ini menjaga urutan saat user mengirim beberapa request sebelum bot membalas.
-            if (!hit && isDirectBotReply) {
-              hit = pending[0];
-              matchReason = "oldest_pending_direct_fallback";
+            const hit = pickBestPendingForReply(pending, message, Date.now(), isDirectBotReply);
+            if (hit) {
+              const lower = message.toLowerCase();
+              if (String(hit.query ?? "").trim() && lower.includes(String(hit.query).toLowerCase().trim())) {
+                matchReason = "best_query_recency";
+              } else if (commandKeyword(hit.command_sent) && lower.includes(commandKeyword(hit.command_sent))) {
+                matchReason = "best_command_recency";
+              } else if (String(hit.feature_id ?? "").trim() && lower.includes(String(hit.feature_id).toLowerCase().trim())) {
+                matchReason = "best_feature_recency";
+              } else if (isDirectBotReply) {
+                matchReason = "best_direct_recency_fallback";
+              } else {
+                matchReason = "best_time_window";
+              }
             }
 
             if (hit) {
