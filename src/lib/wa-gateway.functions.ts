@@ -88,16 +88,20 @@ export const saveWaSettings = createServerFn({ method: "POST" })
   .inputValidator((input: {
     provider: WaProvider;
     bot_number: string;
+    subdomain?: string;
     enabled: boolean;
     commands: Record<string, string>;
     api_token?: string; // optional — empty string keeps existing
+    secret_key?: string; // optional — empty string keeps existing
   }) =>
     z.object({
       provider: z.enum(["fonnte", "wablas"]),
       bot_number: z.string().max(30),
+      subdomain: z.string().max(60).optional(),
       enabled: z.boolean(),
       commands: z.record(z.string(), z.string().max(60)),
       api_token: z.string().max(500).optional(),
+      secret_key: z.string().max(500).optional(),
     }).parse(input),
   )
   .handler(async ({ data }) => {
@@ -105,19 +109,25 @@ export const saveWaSettings = createServerFn({ method: "POST" })
     const patch: {
       provider: string;
       bot_number: string;
+      subdomain: string;
       enabled: boolean;
       commands: Record<string, string>;
       updated_at: string;
       api_token?: string;
+      secret_key?: string;
     } = {
       provider: data.provider,
       bot_number: sanitizePhone(data.bot_number),
+      subdomain: (data.subdomain ?? "").trim().toLowerCase().replace(/[^a-z0-9-]/g, ""),
       enabled: data.enabled,
       commands: data.commands,
       updated_at: new Date().toISOString(),
     };
     if (typeof data.api_token === "string" && data.api_token.trim().length > 0) {
       patch.api_token = data.api_token.trim();
+    }
+    if (typeof data.secret_key === "string" && data.secret_key.trim().length > 0) {
+      patch.secret_key = data.secret_key.trim();
     }
     const { error } = await supabaseAdmin.from("wa_gateway_settings").update(patch).eq("id", 1);
     if (error) return { ok: false as const, error: error.message };
