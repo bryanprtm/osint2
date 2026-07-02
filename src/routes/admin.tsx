@@ -5,10 +5,10 @@ import { Sidebar } from "@/components/osint/Sidebar";
 import { StatusBar } from "@/components/osint/StatusBar";
 import {
   Plus, Trash2, Pencil, Eye, EyeOff, Send, Save, ArrowLeft, RotateCcw, ShieldCheck, Check, X,
-  UserPlus, Users as UsersIcon, KeyRound, Loader2, MessageCircle,
+  UserPlus, Users as UsersIcon, KeyRound, Loader2, MessageCircle, Copy,
 } from "lucide-react";
 import { listUsers, createUser, updateUser, deleteUser, type AppUserRow } from "@/lib/users.functions";
-import { getWaSettings, saveWaSettings, listWaSendLog, DEFAULT_WA_COMMANDS, type WaSettingsPublic, type WaSendLogRow, type WaProvider } from "@/lib/wa-gateway.functions";
+import { getWaSettings, saveWaSettings, listWaSendLog, getWaWebhookUrl, DEFAULT_WA_COMMANDS, type WaSettingsPublic, type WaSendLogRow, type WaProvider } from "@/lib/wa-gateway.functions";
 import { useServerFn } from "@tanstack/react-start";
 
 
@@ -69,9 +69,12 @@ function AdminPage() {
   const [waErr, setWaErr] = useState("");
   const [waBusy, setWaBusy] = useState(false);
   const [waLog, setWaLog] = useState<WaSendLogRow[]>([]);
+  const [waWebhookUrl, setWaWebhookUrl] = useState<string | null>(null);
+  const [waWebhookCopied, setWaWebhookCopied] = useState(false);
   const fetchWaSettings = useServerFn(getWaSettings);
   const persistWaSettings = useServerFn(saveWaSettings);
   const fetchWaLog = useServerFn(listWaSendLog);
+  const fetchWaWebhookUrl = useServerFn(getWaWebhookUrl);
 
   const applyWaSettings = (s: WaSettingsPublic) => {
     setWaProvider(s.provider);
@@ -86,7 +89,8 @@ function AdminPage() {
   useEffect(() => {
     void fetchWaSettings().then((r) => r?.settings && applyWaSettings(r.settings)).catch(() => {});
     void fetchWaLog({ data: { limit: 20 } }).then((r) => setWaLog(r?.rows ?? [])).catch(() => {});
-  }, [fetchWaSettings, fetchWaLog]);
+    void fetchWaWebhookUrl().then((r) => setWaWebhookUrl(r?.url ?? null)).catch(() => {});
+  }, [fetchWaSettings, fetchWaLog, fetchWaWebhookUrl]);
 
 
   // --- Users state ---
@@ -527,6 +531,30 @@ function AdminPage() {
               {waErr && (
                 <div className="flex items-center gap-2 text-[11px] text-destructive border border-destructive/30 bg-destructive/10 px-2 py-1.5 rounded-sm">
                   ⚠ {waErr}
+                </div>
+              )}
+
+              {waWebhookUrl && (
+                <div className="border-t border-border pt-3 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">URL Webhook (salin ke dashboard Wablas / Fonnte)</span>
+                    <button
+                      onClick={() => {
+                        if (waWebhookUrl) {
+                          void navigator.clipboard.writeText(waWebhookUrl);
+                          setWaWebhookCopied(true);
+                          setTimeout(() => setWaWebhookCopied(false), 2000);
+                        }
+                      }}
+                      className="flex items-center gap-1 text-[10px] font-mono text-cyber hover:underline"
+                    >
+                      {waWebhookCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      {waWebhookCopied ? "Disalin!" : "Salin"}
+                    </button>
+                  </div>
+                  <div className="bg-input/40 border border-border rounded-sm px-2.5 py-2 text-[10px] font-mono text-cyber break-all leading-relaxed">
+                    {waWebhookUrl}
+                  </div>
                 </div>
               )}
 

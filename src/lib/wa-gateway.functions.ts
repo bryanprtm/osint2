@@ -83,6 +83,16 @@ export const getWaSettings = createServerFn({ method: "GET" }).handler(async () 
   return { settings: toPublic(row) };
 });
 
+function baseUrl(): string {
+  return process.env.VITE_PUBLISHED_URL || process.env.PUBLISHED_URL || "https://osint2.lovable.app";
+}
+
+export const getWaWebhookUrl = createServerFn({ method: "GET" }).handler(async () => {
+  const key = process.env.WA_WEBHOOK_KEY ?? "";
+  if (!key) return { url: null };
+  return { url: `${baseUrl()}/api/public/wa/incoming?key=${key}` };
+});
+
 // ============= SAVE =============
 export const saveWaSettings = createServerFn({ method: "POST" })
   .inputValidator((input: {
