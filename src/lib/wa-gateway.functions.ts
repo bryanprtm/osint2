@@ -322,7 +322,7 @@ export const sendWaLookup = createServerFn({ method: "POST" })
     const q = sanitizeQuery(data.featureId, data.query);
     if (!q) return { ok: false as const, message: "Query kosong." };
 
-    const message = `${cmd.trim()}${q}`;
+    const message = `${cmd.trim()} ${q}`;
     const provider = row.provider as WaProvider;
 
     let result: { ok: boolean; status: number; text: string };
