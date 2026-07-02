@@ -70,6 +70,7 @@ function AdminPage() {
   const [waBusy, setWaBusy] = useState(false);
   const [waLog, setWaLog] = useState<WaSendLogRow[]>([]);
   const [waWebhookUrl, setWaWebhookUrl] = useState<string | null>(null);
+  const [waWebhookCopied, setWaWebhookCopied] = useState(false);
   const fetchWaSettings = useServerFn(getWaSettings);
   const persistWaSettings = useServerFn(saveWaSettings);
   const fetchWaLog = useServerFn(listWaSendLog);
