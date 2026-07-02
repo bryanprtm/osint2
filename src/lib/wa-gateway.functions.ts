@@ -282,3 +282,38 @@ export const listWaSendLog = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     return { rows: (rows ?? []) as WaSendLogRow[] };
   });
+
+// ============= MY HISTORY (per user + feature, dengan balasan) =============
+export type WaHistoryRow = {
+  id: string;
+  feature_id: string;
+  query: string;
+  command_sent: string;
+  status: string;
+  reply: string | null;
+  reply_at: string | null;
+  reply_sender: string | null;
+  created_at: string;
+};
+
+export const listMyWaHistory = createServerFn({ method: "POST" })
+  .inputValidator((input: { username?: string; featureId?: string; limit?: number }) =>
+    z.object({
+      username: z.string().max(80).optional(),
+      featureId: z.string().max(80).optional(),
+      limit: z.number().int().min(1).max(50).optional(),
+    }).parse(input ?? {}),
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    let q = supabaseAdmin
+      .from("wa_send_log")
+      .select("id, feature_id, query, command_sent, status, reply, reply_at, reply_sender, created_at")
+      .order("created_at", { ascending: false })
+      .limit(data.limit ?? 10);
+    if (data.username) q = q.eq("username", data.username);
+    if (data.featureId) q = q.eq("feature_id", data.featureId);
+    const { data: rows, error } = await q;
+    if (error) throw new Error(error.message);
+    return { rows: (rows ?? []) as WaHistoryRow[] };
+  });

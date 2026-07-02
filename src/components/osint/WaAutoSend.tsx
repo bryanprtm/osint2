@@ -3,6 +3,8 @@ import { MessageCircle, Loader2, Check, X, MessagesSquare } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getWaSettings, sendWaLookup, getWaReply, type WaSettingsPublic } from "@/lib/wa-gateway.functions";
 import { useAuth } from "@/lib/auth";
+import { WaHistory } from "@/components/osint/WaHistory";
+
 
 const POLL_INTERVAL_MS = 4000;
 const POLL_TIMEOUT_MS = 120_000; // 2 menit
@@ -16,6 +18,7 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
   const [reply, setReply] = useState<string | null>(null);
   const [waitingReply, setWaitingReply] = useState(false);
   const [waitElapsed, setWaitElapsed] = useState(0);
+  const [historyKey, setHistoryKey] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -57,6 +60,7 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
         if (r?.found && r.reply) {
           setReply(r.reply);
           setWaitingReply(false);
+          setHistoryKey((k) => k + 1);
           stopPolling();
         }
       } catch {
@@ -86,6 +90,7 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
       setMsg({ ok: !!r?.ok, text: r?.message ?? "" });
       if (r?.ok && r.logId) {
         setLogId(r.logId);
+        setHistoryKey((k) => k + 1);
         startPolling(r.logId);
       }
       if (!r?.ok) setTimeout(() => setMsg(null), 5000);
@@ -139,6 +144,8 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
           Belum menerima balasan setelah 2 menit. Cek WhatsApp Anda langsung, atau pastikan webhook incoming sudah dikonfigurasi di dashboard gateway.
         </div>
       )}
+
+      <WaHistory featureId={featureId} refreshKey={historyKey} />
     </div>
   );
 }
