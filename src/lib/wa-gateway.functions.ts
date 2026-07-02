@@ -207,7 +207,7 @@ export const sendWaLookup = createServerFn({ method: "POST" })
     let result: { ok: boolean; status: number; text: string };
     try {
       result = provider === "wablas"
-        ? await sendViaWablas(row.api_token, target, message)
+        ? await sendViaWablas(row.api_token, row.secret_key ?? "", row.subdomain ?? "", target, message)
         : await sendViaFonnte(row.api_token, target, message);
     } catch (e) {
       const errMsg = (e as Error).message;
