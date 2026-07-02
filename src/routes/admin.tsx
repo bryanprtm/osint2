@@ -54,6 +54,12 @@ function AdminPage() {
   const [tgEnabled, setTgEnabled] = useState(settings.telegramEnabled);
   const [savedNote, setSavedNote] = useState("");
 
+  // --- WhatsApp bot state ---
+  const [waCfg, setWaCfg] = useState<WaConfig>({ enabled: false, phone: "", commands: { ...DEFAULT_WA_COMMANDS } });
+  const [waNote, setWaNote] = useState("");
+  useEffect(() => { setWaCfg(loadWaConfig()); }, []);
+
+
   // --- Users state ---
   const [users, setUsers] = useState<AppUserRow[]>([]);
   const [usersLoading, setUsersLoading] = useState(true);
