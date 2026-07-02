@@ -454,3 +454,37 @@ export const listMyWaHistory = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { rows: (rows ?? []) as WaHistoryRow[] };
   });
+
+// ============= PENDING LOCK (global per user) =============
+// Kembalikan permintaan tertua yang masih menunggu balasan bot (status=sent, reply=null)
+// dalam 2 menit terakhir. Dipakai untuk mengunci tombol kirim agar balasan tidak tertukar.
+export const getWaPending = createServerFn({ method: "POST" })
+  .inputValidator((input: { username?: string }) =>
+    z.object({ username: z.string().max(80).optional() }).parse(input ?? {}),
+  )
+  .handler(async ({ data }) => {
+    await reconcileUnmatchedWaReplies();
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const since = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    let q = supabaseAdmin
+      .from("wa_send_log")
+      .select("id, feature_id, query, command_sent, created_at")
+      .eq("status", "sent")
+      .is("reply", null)
+      .gte("created_at", since)
+      .order("created_at", { ascending: true })
+      .limit(1);
+    if (data.username) q = q.eq("username", data.username);
+    const { data: rows, error } = await q;
+    if (error) throw new Error(error.message);
+    const row = (rows ?? [])[0] as any;
+    if (!row) return { pending: false as const };
+    return {
+      pending: true as const,
+      logId: row.id as string,
+      featureId: row.feature_id as string,
+      query: row.query as string,
+      command: row.command_sent as string,
+      created_at: row.created_at as string,
+    };
+  });
