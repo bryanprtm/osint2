@@ -534,6 +534,30 @@ function AdminPage() {
                 </div>
               )}
 
+              {waWebhookUrl && (
+                <div className="border-t border-border pt-3 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">URL Webhook (salin ke dashboard Wablas / Fonnte)</span>
+                    <button
+                      onClick={() => {
+                        if (waWebhookUrl) {
+                          void navigator.clipboard.writeText(waWebhookUrl);
+                          setWaWebhookCopied(true);
+                          setTimeout(() => setWaWebhookCopied(false), 2000);
+                        }
+                      }}
+                      className="flex items-center gap-1 text-[10px] font-mono text-cyber hover:underline"
+                    >
+                      {waWebhookCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      {waWebhookCopied ? "Disalin!" : "Salin"}
+                    </button>
+                  </div>
+                  <div className="bg-input/40 border border-border rounded-sm px-2.5 py-2 text-[10px] font-mono text-cyber break-all leading-relaxed">
+                    {waWebhookUrl}
+                  </div>
+                </div>
+              )}
+
               <div className="text-[10px] font-mono text-muted-foreground border-t border-border pt-2 leading-relaxed space-y-0.5">
                 <div>1. Daftar di <span className="text-cyber">fonnte.com</span> atau <span className="text-cyber">wablas.com</span>, scan QR sekali di dashboard provider untuk menautkan nomor bot.</div>
                 <div>2. Salin API token dari dashboard provider ke form di atas, isi nomor bot & simpan.</div>
