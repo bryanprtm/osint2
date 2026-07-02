@@ -116,78 +116,75 @@ export type Database = {
         }
         Relationships: []
       }
-      wa_lookups: {
+      wa_gateway_settings: {
+        Row: {
+          api_token: string
+          bot_number: string
+          commands: Json
+          enabled: boolean
+          id: number
+          provider: string
+          updated_at: string
+        }
+        Insert: {
+          api_token?: string
+          bot_number?: string
+          commands?: Json
+          enabled?: boolean
+          id?: number
+          provider?: string
+          updated_at?: string
+        }
+        Update: {
+          api_token?: string
+          bot_number?: string
+          commands?: Json
+          enabled?: boolean
+          id?: number
+          provider?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      wa_send_log: {
         Row: {
           command_sent: string
           created_at: string
           error: string | null
+          feature_id: string
           id: string
-          module_id: string
+          provider: string
+          provider_response: string | null
           query: string
-          responded_at: string | null
-          response_text: string | null
           status: string
-          target_number: string
+          user_id: string | null
+          username: string | null
         }
         Insert: {
           command_sent: string
           created_at?: string
           error?: string | null
+          feature_id: string
           id?: string
-          module_id: string
+          provider?: string
+          provider_response?: string | null
           query: string
-          responded_at?: string | null
-          response_text?: string | null
           status?: string
-          target_number: string
+          user_id?: string | null
+          username?: string | null
         }
         Update: {
           command_sent?: string
           created_at?: string
           error?: string | null
+          feature_id?: string
           id?: string
-          module_id?: string
+          provider?: string
+          provider_response?: string | null
           query?: string
-          responded_at?: string | null
-          response_text?: string | null
           status?: string
-          target_number?: string
-        }
-        Relationships: []
-      }
-      wa_settings: {
-        Row: {
-          bot_number_kk: string
-          bot_number_nik: string
-          command_kk: string
-          command_nik: string
-          enabled: boolean
-          id: number
-          response_timeout_sec: number
-          updated_at: string
-          wablas_endpoint: string
-        }
-        Insert: {
-          bot_number_kk?: string
-          bot_number_nik?: string
-          command_kk?: string
-          command_nik?: string
-          enabled?: boolean
-          id?: number
-          response_timeout_sec?: number
-          updated_at?: string
-          wablas_endpoint?: string
-        }
-        Update: {
-          bot_number_kk?: string
-          bot_number_nik?: string
-          command_kk?: string
-          command_nik?: string
-          enabled?: boolean
-          id?: number
-          response_timeout_sec?: number
-          updated_at?: string
-          wablas_endpoint?: string
+          user_id?: string | null
+          username?: string | null
         }
         Relationships: []
       }
