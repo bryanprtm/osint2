@@ -26,13 +26,16 @@ function digits(v: unknown): string {
  * Fonnte payload:
  *   { device, sender, message, member, name, ... }
  */
-function parsePayload(p: any): { sender: string; message: string; fromMe: boolean } {
+function parsePayload(p: any): { sender: string; message: string; fromMe: boolean; chatPhone: string } {
   const d = p?.data && typeof p.data === "object" ? p.data : p ?? {};
   const sender = digits(d.sender ?? d.phone ?? d.from ?? p?.sender ?? p?.phone ?? "");
+  // Wablas can put the actual chat/contact number in `phone`, while `sender`
+  // can be the connected device/account. Keep both so replies can be matched.
+  const chatPhone = digits(d.phone ?? p?.phone ?? d.pushName ?? p?.pushName ?? "");
   const message = String(d.message ?? d.body ?? d.text ?? p?.message ?? p?.body ?? "").trim();
   const fromMeRaw = d.isFromMe ?? d.fromMe ?? d.from_me ?? p?.fromMe ?? p?.isFromMe ?? false;
   const fromMe = fromMeRaw === true || fromMeRaw === "true" || fromMeRaw === 1 || fromMeRaw === "1";
-  return { sender, message, fromMe };
+  return { sender, message, fromMe, chatPhone };
 }
 
 export const Route = createFileRoute("/api/public/wa/incoming")({
@@ -75,7 +78,7 @@ export const Route = createFileRoute("/api/public/wa/incoming")({
           return json({ ok: false, error: `bad body: ${(e as Error).message}` }, 400);
         }
 
-        const { sender, message, fromMe } = parsePayload(payload);
+        const { sender, message, fromMe, chatPhone } = parsePayload(payload);
 
         // Abaikan pesan kosong.
         if (!message) return json({ ok: true, skipped: "empty" });
@@ -89,9 +92,10 @@ export const Route = createFileRoute("/api/public/wa/incoming")({
           .eq("id", 1)
           .maybeSingle();
         const botNumber = digits((setting as any)?.bot_number ?? "");
-        const senderMatchesBot = !!botNumber && !!sender && (sender === botNumber || sender.endsWith(botNumber) || botNumber.endsWith(sender));
-        // Field "phone" di payload Wablas = nomor device kita sendiri.
-        const devicePhone = digits((payload as any)?.phone ?? (payload as any)?.data?.phone ?? "");
+        const numberMatches = (a: string, b: string) => !!a && !!b && (a === b || a.endsWith(b) || b.endsWith(a));
+        const senderMatchesBot = !!botNumber && (numberMatches(sender, botNumber) || numberMatches(chatPhone, botNumber));
+        // Di Wablas, field `phone` bisa berisi nomor chat/contact bot yang kita kirimi pesan.
+        const devicePhone = chatPhone;
         // Skip hanya kalau pesan echo dari user ke device kita (bukan dari bot balasan).
         // Kalau fromMe=true (device kita yang mengirim, artinya bot balasan) → jangan skip.
         const senderIsOurDevice = !!devicePhone && !!sender && sender === devicePhone && !fromMe;
@@ -133,7 +137,7 @@ export const Route = createFileRoute("/api/public/wa/incoming")({
               });
               if (hit) matchReason = "feature_keyword";
             }
-            // 4) fallback: kalau sender=bot_number, fromMe, atau bot_number kosong → ambil pending terbaru
+            // 4) fallback: kalau sender/chat phone=bot_number, fromMe, atau bot_number kosong → ambil pending terbaru
             if (!hit && (senderMatchesBot || fromMe || !botNumber)) {
               hit = pending[0];
               matchReason = "latest_pending_fallback";
@@ -160,7 +164,7 @@ export const Route = createFileRoute("/api/public/wa/incoming")({
           matched_log_id: matchedId,
         });
 
-        return json({ ok: true, matched: matchedId, matchReason, sender, devicePhone, fromMe, botNumber });
+        return json({ ok: true, matched: matchedId, matchReason, sender, chatPhone, devicePhone, fromMe, botNumber });
       },
     },
   },
