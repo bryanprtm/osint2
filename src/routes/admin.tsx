@@ -191,6 +191,18 @@ function AdminPage() {
     setTimeout(() => setSavedNote(""), 2500);
   };
 
+  const saveWhatsapp = () => {
+    const clean: WaConfig = { ...waCfg, phone: sanitizePhone(waCfg.phone) };
+    saveWaConfig(clean);
+    setWaCfg(clean);
+    setWaNote("Konfigurasi WhatsApp tersimpan (disimpan di browser).");
+    setTimeout(() => setWaNote(""), 2800);
+  };
+  const setWaCommand = (fid: string, val: string) =>
+    setWaCfg((c) => ({ ...c, commands: { ...c.commands, [fid]: val } }));
+
+
+
   return (
     <div className="min-h-screen flex w-full">
       <Sidebar categories={categories} activeCategory={activeCategory} onSelectCategory={setActiveCategory} />
