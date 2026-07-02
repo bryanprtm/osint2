@@ -8,7 +8,7 @@ import { WaHistory } from "@/components/osint/WaHistory";
 
 
 const POLL_INTERVAL_MS = 4000;
-const POLL_TIMEOUT_MS = 120_000; // 2 menit
+const POLL_TIMEOUT_MS = 300_000; // 5 menit
 
 export function WaAutoSend({ featureId, query }: { featureId: string; query: string }) {
   const { user } = useAuth();
@@ -153,7 +153,7 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
           <div className="flex items-center gap-1.5">
             <Lock className="w-3 h-3 shrink-0" />
             <span className="break-words">
-              Ada permintaan sebelumnya yang masih menunggu balasan bot: <b>{pending!.command}</b>. Tombol kirim dinonaktifkan sampai balasan diterima atau timeout 2 menit tercapai.
+              Ada permintaan sebelumnya yang masih menunggu balasan bot: <b>{pending!.command}</b>. Tombol kirim dinonaktifkan sampai balasan diterima atau timeout 5 menit tercapai.
             </span>
           </div>
         </div>
@@ -187,7 +187,7 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
 
       {logId && !waitingReply && !reply && msg?.ok && (
         <div className="text-[10px] font-mono text-warning px-2 py-1 border border-warning/30 rounded-sm">
-          Belum menerima balasan setelah 2 menit. Cek WhatsApp Anda langsung, atau pastikan webhook incoming sudah dikonfigurasi di dashboard gateway.
+          Belum menerima balasan setelah 5 menit. Cek WhatsApp Anda langsung, atau pastikan webhook incoming sudah dikonfigurasi di dashboard gateway.
         </div>
       )}
 
