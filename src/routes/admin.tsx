@@ -8,7 +8,7 @@ import {
   UserPlus, Users as UsersIcon, KeyRound, Loader2, MessageCircle,
 } from "lucide-react";
 import { listUsers, createUser, updateUser, deleteUser, type AppUserRow } from "@/lib/users.functions";
-import { getWaSettings, saveWaSettings, listWaSendLog, DEFAULT_WA_COMMANDS, type WaSettingsPublic, type WaSendLogRow, type WaProvider } from "@/lib/wa-gateway.functions";
+import { getWaSettings, saveWaSettings, listWaSendLog, getWaWebhookUrl, DEFAULT_WA_COMMANDS, type WaSettingsPublic, type WaSendLogRow, type WaProvider } from "@/lib/wa-gateway.functions";
 import { useServerFn } from "@tanstack/react-start";
 
 
