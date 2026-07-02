@@ -69,15 +69,11 @@ function commandKeyword(command: unknown): string {
   return first.replace(/^\//, "");
 }
 
-function textIncludes(haystack: string, needle: unknown): boolean {
-  const value = String(needle ?? "").toLowerCase().trim();
-  return !!value && haystack.includes(value);
-}
-
 function scoreReplyMatch(
   pending: { feature_id: string; command_sent: string; query: string; created_at: string },
   message: string,
   replyTime: number,
+  allowTimeFallback: boolean,
 ): number {
   const sentAt = new Date(pending.created_at).getTime();
   const diffMs = replyTime - sentAt;
@@ -92,6 +88,7 @@ function scoreReplyMatch(
   if (queryText && lower.includes(queryText)) return 10_000 + queryText.length * 100 + recency;
   if (commandText && lower.includes(commandText)) return 5_000 + commandText.length * 50 + recency;
   if (featureText && lower.includes(featureText)) return 3_000 + featureText.length * 25 + recency;
+  if (!allowTimeFallback) return -1;
   return 100 + recency;
 }
 
@@ -99,9 +96,10 @@ function pickBestPendingForReply<T extends { feature_id: string; command_sent: s
   pending: T[],
   message: string,
   replyTime: number,
+  allowTimeFallback: boolean,
 ): T | undefined {
   return pending
-    .map((row) => ({ row, score: scoreReplyMatch(row, message, replyTime) }))
+    .map((row) => ({ row, score: scoreReplyMatch(row, message, replyTime, allowTimeFallback) }))
     .filter(({ score }) => score >= 0)
     .sort((a, b) => b.score - a.score || new Date(b.row.created_at).getTime() - new Date(a.row.created_at).getTime())[0]?.row;
 }
@@ -161,7 +159,7 @@ async function reconcileUnmatchedWaReplies(logId?: string, featureId?: string) {
   const usedPendingIds = new Set<string>();
   for (const hit of incoming) {
     const availablePending = pending.filter((p) => !usedPendingIds.has(p.id));
-    const p = pickBestPendingForReply(availablePending, hit.meta.message, hit.time);
+    const p = pickBestPendingForReply(availablePending, hit.meta.message, hit.time, true);
     if (!p) continue;
 
     const replyAt = new Date(hit.time).toISOString();
