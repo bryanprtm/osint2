@@ -8,7 +8,7 @@ import { WaHistory } from "@/components/osint/WaHistory";
 
 
 const POLL_INTERVAL_MS = 4000;
-const POLL_TIMEOUT_MS = 120_000; // 2 menit
+const POLL_TIMEOUT_MS = 300_000; // 5 menit
 
 export function WaAutoSend({ featureId, query }: { featureId: string; query: string }) {
   const { user } = useAuth();
