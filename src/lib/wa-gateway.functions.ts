@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { commandKeyword, pickBestWaReplyMatch, scoreWaReplyMatch } from "@/lib/wa-reply-match";
 
 export type WaProvider = "fonnte" | "wablas";
 
@@ -64,46 +65,6 @@ function incomingMeta(row: any) {
   };
 }
 
-function commandKeyword(command: unknown): string {
-  const first = String(command ?? "").toLowerCase().split(/\s+/)[0] ?? "";
-  return first.replace(/^\//, "");
-}
-
-function scoreReplyMatch(
-  pending: { feature_id: string; command_sent: string; query: string; created_at: string },
-  message: string,
-  replyTime: number,
-  allowTimeFallback: boolean,
-): number {
-  const sentAt = new Date(pending.created_at).getTime();
-  const diffMs = replyTime - sentAt;
-  if (!Number.isFinite(sentAt) || diffMs < -5_000 || diffMs > 30 * 60 * 1000) return -1;
-
-  const lower = message.toLowerCase();
-  const queryText = String(pending.query ?? "").toLowerCase().trim();
-  const commandText = commandKeyword(pending.command_sent);
-  const featureText = String(pending.feature_id ?? "").toLowerCase().trim();
-  const recency = Math.max(0, 30 * 60 * 1000 - diffMs) / 1000;
-
-  if (queryText && lower.includes(queryText)) return 10_000 + queryText.length * 100 + recency;
-  if (commandText && lower.includes(commandText)) return 5_000 + commandText.length * 50 + recency;
-  if (featureText && lower.includes(featureText)) return 3_000 + featureText.length * 25 + recency;
-  if (!allowTimeFallback) return -1;
-  return 100 + recency;
-}
-
-function pickBestPendingForReply<T extends { feature_id: string; command_sent: string; query: string; created_at: string }>(
-  pending: T[],
-  message: string,
-  replyTime: number,
-  allowTimeFallback: boolean,
-): T | undefined {
-  return pending
-    .map((row) => ({ row, score: scoreReplyMatch(row, message, replyTime, allowTimeFallback) }))
-    .filter(({ score }) => score >= 0)
-    .sort((a, b) => b.score - a.score || new Date(b.row.created_at).getTime() - new Date(a.row.created_at).getTime())[0]?.row;
-}
-
 async function reconcileUnmatchedWaReplies(logId?: string, featureId?: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: setting } = await supabaseAdmin
@@ -139,7 +100,7 @@ async function reconcileUnmatchedWaReplies(logId?: string, featureId?: string) {
     query: string;
     created_at: string;
   }>;
-  if (pending.length === 0) return { updated: 0 };
+  if (pending.length === 0) return repairMisroutedWaReplies(logId, featureId);
 
   const earliestMs = Math.min(...pending.map((p) => new Date(p.created_at).getTime()));
   const { data: incomingRows, error: incomingError } = await supabaseAdmin
@@ -159,7 +120,7 @@ async function reconcileUnmatchedWaReplies(logId?: string, featureId?: string) {
   const usedPendingIds = new Set<string>();
   for (const hit of incoming) {
     const availablePending = pending.filter((p) => !usedPendingIds.has(p.id));
-    const p = pickBestPendingForReply(availablePending, hit.meta.message, hit.time, true);
+    const p = pickBestWaReplyMatch(availablePending, hit.meta.message, hit.time, true);
     if (!p) continue;
 
     const replyAt = new Date(hit.time).toISOString();
@@ -174,6 +135,95 @@ async function reconcileUnmatchedWaReplies(logId?: string, featureId?: string) {
     usedPendingIds.add(p.id);
     updated += 1;
   }
+  const repaired = await repairMisroutedWaReplies(logId, featureId);
+  return { updated: updated + repaired.updated };
+}
+
+async function repairMisroutedWaReplies(targetLogId?: string, targetFeatureId?: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const since = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+
+  const { data: incomingRows, error: incomingError } = await supabaseAdmin
+    .from("wa_incoming")
+    .select("id, sender, message, created_at, raw, matched_log_id")
+    .not("matched_log_id", "is", null)
+    .gte("created_at", since)
+    .order("created_at", { ascending: true })
+    .limit(300);
+  if (incomingError) throw new Error(incomingError.message);
+  if (!incomingRows || incomingRows.length === 0) return { updated: 0 };
+
+  const { data: logRows, error: logError } = await supabaseAdmin
+    .from("wa_send_log")
+    .select("id, feature_id, command_sent, query, created_at, reply")
+    .eq("status", "sent")
+    .gte("created_at", new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString())
+    .order("created_at", { ascending: true })
+    .limit(500);
+  if (logError) throw new Error(logError.message);
+
+  const logs = (logRows ?? []) as Array<{
+    id: string;
+    feature_id: string;
+    command_sent: string;
+    query: string;
+    created_at: string;
+    reply: string | null;
+  }>;
+  if (logs.length === 0) return { updated: 0 };
+
+  let updated = 0;
+  for (const row of incomingRows as Array<any>) {
+    const meta = incomingMeta(row);
+    if (!meta.message || meta.isGroup) continue;
+
+    const replyTime = new Date(row.created_at).getTime();
+    const current = logs.find((log) => log.id === row.matched_log_id);
+    if (!current) continue;
+
+    const candidates = logs.filter((log) => {
+      if (log.id === current.id) return true;
+      if (log.reply) return false;
+      const sentAt = new Date(log.created_at).getTime();
+      return Number.isFinite(sentAt) && sentAt <= replyTime + 5_000 && replyTime - sentAt <= 30 * 60 * 1000;
+    });
+    const best = pickBestWaReplyMatch(candidates, meta.message, replyTime, false);
+    if (!best || best.id === current.id) continue;
+    if (targetLogId && best.id !== targetLogId) continue;
+    if (targetFeatureId && best.feature_id !== targetFeatureId) continue;
+
+    const bestScore = scoreWaReplyMatch(best, meta.message, replyTime, false);
+    const currentScore = scoreWaReplyMatch(current, meta.message, replyTime, false);
+    if (bestScore < 10_000 || bestScore <= currentScore + 1_000) continue;
+
+    const replyAt = new Date(replyTime).toISOString();
+    const replySender = meta.chatPhone || meta.sender;
+    const { error: moveError } = await supabaseAdmin
+      .from("wa_send_log")
+      .update({ reply: meta.message, reply_at: replyAt, reply_sender: replySender })
+      .eq("id", best.id)
+      .is("reply", null);
+    if (moveError) throw new Error(moveError.message);
+
+    if (current.reply === meta.message) {
+      const { error: clearError } = await supabaseAdmin
+        .from("wa_send_log")
+        .update({ reply: null, reply_at: null, reply_sender: null })
+        .eq("id", current.id);
+      if (clearError) throw new Error(clearError.message);
+      current.reply = null;
+    }
+
+    const { error: incomingUpdateError } = await supabaseAdmin
+      .from("wa_incoming")
+      .update({ matched_log_id: best.id })
+      .eq("id", row.id);
+    if (incomingUpdateError) throw new Error(incomingUpdateError.message);
+
+    best.reply = meta.message;
+    updated += 1;
+  }
+
   return { updated };
 }
 
