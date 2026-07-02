@@ -41,6 +41,10 @@ function candidateKeys(candidate: WaReplyCandidate): Set<string> {
   return keys;
 }
 
+function messageMentionsAnyKey(message: string, keys: Set<string>): boolean {
+  return [...keys].some((key) => key.length >= 3 && new RegExp(`\\b${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(message));
+}
+
 export function detectReplyIntents(message: string): Set<string> {
   const lower = message.toLowerCase();
   const intents = new Set<string>();
@@ -115,8 +119,9 @@ export function scoreWaReplyMatch(
     score += 10_000 + queryText.length * 100;
   }
 
-  if (commandText && (lower.includes(commandText) || keys.has(commandText))) score += 5_000 + commandText.length * 50;
-  if (featureText && (lower.includes(featureText) || keys.has(featureText))) score += 3_000 + featureText.length * 25;
+  if (commandText && lower.includes(commandText)) score += 5_000 + commandText.length * 50;
+  if (featureText && lower.includes(featureText)) score += 3_000 + featureText.length * 25;
+  if (!hasIntent && messageMentionsAnyKey(message, keys)) score += 2_000;
 
   if (score > 0) return score + recency;
   if (!allowTimeFallback || hasIntent) return -1;
