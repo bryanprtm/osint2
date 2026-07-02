@@ -13,6 +13,7 @@ import { Route as OsirisRouteImport } from './routes/osiris'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPublicWaIncomingRouteImport } from './routes/api/public/wa/incoming'
 
 const OsirisRoute = OsirisRouteImport.update({
   id: '/osiris',
@@ -34,18 +35,25 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicWaIncomingRoute = ApiPublicWaIncomingRouteImport.update({
+  id: '/api/public/wa/incoming',
+  path: '/api/public/wa/incoming',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
   '/osiris': typeof OsirisRoute
+  '/api/public/wa/incoming': typeof ApiPublicWaIncomingRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
   '/osiris': typeof OsirisRoute
+  '/api/public/wa/incoming': typeof ApiPublicWaIncomingRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +61,20 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
   '/osiris': typeof OsirisRoute
+  '/api/public/wa/incoming': typeof ApiPublicWaIncomingRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/login' | '/osiris'
+  fullPaths: '/' | '/admin' | '/login' | '/osiris' | '/api/public/wa/incoming'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/login' | '/osiris'
-  id: '__root__' | '/' | '/admin' | '/login' | '/osiris'
+  to: '/' | '/admin' | '/login' | '/osiris' | '/api/public/wa/incoming'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/login'
+    | '/osiris'
+    | '/api/public/wa/incoming'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +82,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   LoginRoute: typeof LoginRoute
   OsirisRoute: typeof OsirisRoute
+  ApiPublicWaIncomingRoute: typeof ApiPublicWaIncomingRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -99,6 +115,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/wa/incoming': {
+      id: '/api/public/wa/incoming'
+      path: '/api/public/wa/incoming'
+      fullPath: '/api/public/wa/incoming'
+      preLoaderRoute: typeof ApiPublicWaIncomingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -107,6 +130,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   LoginRoute: LoginRoute,
   OsirisRoute: OsirisRoute,
+  ApiPublicWaIncomingRoute: ApiPublicWaIncomingRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
