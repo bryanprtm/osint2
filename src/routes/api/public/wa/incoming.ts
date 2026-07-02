@@ -90,40 +90,67 @@ export const Route = createFileRoute("/api/public/wa/incoming")({
           .maybeSingle();
         const botNumber = digits((setting as any)?.bot_number ?? "");
         const senderMatchesBot = !!botNumber && !!sender && (sender === botNumber || sender.endsWith(botNumber) || botNumber.endsWith(sender));
-
-        // Anggap balasan dari bot apabila:
-        // - fromMe (device wablas sendiri yang membalas), ATAU
-        // - sender = bot_number yang dikonfigurasi, ATAU
-        // - bot_number belum dikonfigurasi (single-bot assumption)
-        const treatAsBotReply = fromMe || senderMatchesBot || !botNumber;
+        // Field "phone" di payload Wablas = nomor device kita sendiri.
+        const devicePhone = digits((payload as any)?.phone ?? (payload as any)?.data?.phone ?? "");
+        // Skip hanya kalau pesan echo dari user ke device kita (bukan dari bot balasan).
+        // Kalau fromMe=true (device kita yang mengirim, artinya bot balasan) → jangan skip.
+        const senderIsOurDevice = !!devicePhone && !!sender && sender === devicePhone && !fromMe;
 
         let matchedId: string | null = null;
-        if (treatAsBotReply) {
-          const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+        let matchReason = "no_pending";
+
+        if (!senderIsOurDevice) {
+          const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
           const { data: pendingAll } = await supabaseAdmin
             .from("wa_send_log")
-            .select("id, feature_id, command_sent, created_at")
+            .select("id, feature_id, command_sent, query, created_at")
             .eq("status", "sent")
             .is("reply", null)
             .gte("created_at", cutoff)
             .order("created_at", { ascending: false })
-            .limit(20);
+            .limit(30);
 
-          const pending = (pendingAll ?? []) as Array<{ id: string; feature_id: string; command_sent: string }>;
+          const pending = (pendingAll ?? []) as Array<{ id: string; feature_id: string; command_sent: string; query: string }>;
           if (pending.length > 0) {
-            // Coba cocokkan berdasar prefix command bot (mis. /namacek → feature "nama").
             const lower = message.toLowerCase();
-            const byFeature = pending.find((p) => {
-              const fid = String(p.feature_id ?? "").toLowerCase();
-              const cmd = String(p.command_sent ?? "").toLowerCase().split(/\s+/)[0] ?? "";
-              return (fid && lower.includes(fid)) || (cmd && lower.includes(cmd.replace(/^\//, "")));
-            });
-            matchedId = (byFeature ?? pending[0]).id;
-            await supabaseAdmin
-              .from("wa_send_log")
-              .update({ reply: message, reply_at: new Date().toISOString(), reply_sender: sender })
-              .eq("id", matchedId);
+            // 1) match berdasarkan nilai query (NIK/KK/nama) muncul di balasan — paling akurat
+            let hit = pending.find((p) => p.query && lower.includes(String(p.query).toLowerCase()));
+            if (hit) matchReason = "query_in_message";
+            // 2) match berdasarkan prefix command
+            if (!hit) {
+              hit = pending.find((p) => {
+                const cmd = String(p.command_sent ?? "").toLowerCase().split(/\s+/)[0] ?? "";
+                const cmdClean = cmd.replace(/^\//, "");
+                return cmdClean && lower.includes(cmdClean);
+              });
+              if (hit) matchReason = "command_prefix";
+            }
+            // 3) match berdasarkan feature_id keyword
+            if (!hit) {
+              hit = pending.find((p) => {
+                const fid = String(p.feature_id ?? "").toLowerCase();
+                return fid && lower.includes(fid);
+              });
+              if (hit) matchReason = "feature_keyword";
+            }
+            // 4) fallback: kalau sender=bot_number, fromMe, atau bot_number kosong → ambil pending terbaru
+            if (!hit && (senderMatchesBot || fromMe || !botNumber)) {
+              hit = pending[0];
+              matchReason = "latest_pending_fallback";
+            }
+
+            if (hit) {
+              matchedId = hit.id;
+              await supabaseAdmin
+                .from("wa_send_log")
+                .update({ reply: message, reply_at: new Date().toISOString(), reply_sender: sender })
+                .eq("id", matchedId);
+            } else {
+              matchReason = "no_strategy_matched";
+            }
           }
+        } else {
+          matchReason = "sender_is_our_device";
         }
 
         await supabaseAdmin.from("wa_incoming").insert({
@@ -133,7 +160,7 @@ export const Route = createFileRoute("/api/public/wa/incoming")({
           matched_log_id: matchedId,
         });
 
-        return json({ ok: true, matched: matchedId, treatedAsBotReply: treatAsBotReply });
+        return json({ ok: true, matched: matchedId, matchReason, sender, devicePhone, fromMe, botNumber });
       },
     },
   },
