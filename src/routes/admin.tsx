@@ -215,15 +215,38 @@ function AdminPage() {
     setTimeout(() => setSavedNote(""), 2500);
   };
 
-  const saveWhatsapp = () => {
-    const clean: WaConfig = { ...waCfg, phone: sanitizePhone(waCfg.phone) };
-    saveWaConfig(clean);
-    setWaCfg(clean);
-    setWaNote("Konfigurasi WhatsApp tersimpan (disimpan di browser).");
-    setTimeout(() => setWaNote(""), 2800);
+  const saveWhatsapp = async () => {
+    setWaBusy(true);
+    setWaNote("");
+    setWaErr("");
+    try {
+      const r = await persistWaSettings({
+        data: {
+          provider: waProvider,
+          bot_number: waBotNumber,
+          enabled: waEnabled,
+          commands: waCommands,
+          api_token: waToken.trim() || undefined,
+        },
+      });
+      if (!r?.ok) {
+        setWaErr(r?.error ?? "Gagal menyimpan");
+        return;
+      }
+      applyWaSettings(r.settings);
+      setWaToken("");
+      setWaNote("Konfigurasi WhatsApp tersimpan.");
+      const l = await fetchWaLog({ data: { limit: 20 } });
+      setWaLog(l?.rows ?? []);
+      setTimeout(() => setWaNote(""), 2800);
+    } catch (e) {
+      setWaErr((e as Error).message);
+    } finally {
+      setWaBusy(false);
+    }
   };
   const setWaCommand = (fid: string, val: string) =>
-    setWaCfg((c) => ({ ...c, commands: { ...c.commands, [fid]: val } }));
+    setWaCommands((c) => ({ ...c, [fid]: val }));
 
 
 
