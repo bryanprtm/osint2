@@ -77,35 +77,48 @@ export const Route = createFileRoute("/api/public/wa/incoming")({
 
         const { sender, message, fromMe } = parsePayload(payload);
 
-        // Abaikan pesan kosong dan pesan yang dikirim oleh bot itu sendiri (echo).
+        // Abaikan pesan kosong.
         if (!message) return json({ ok: true, skipped: "empty" });
-        if (fromMe) return json({ ok: true, skipped: "from-me" });
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-        // Ambil setting: nomor bot & apakah pengirim = bot
+        // Ambil setting nomor bot (opsional).
         const { data: setting } = await supabaseAdmin
           .from("wa_gateway_settings")
           .select("bot_number")
           .eq("id", 1)
           .maybeSingle();
         const botNumber = digits((setting as any)?.bot_number ?? "");
-        const senderIsBot = botNumber && sender && (sender === botNumber || sender.endsWith(botNumber) || botNumber.endsWith(sender));
+        const senderMatchesBot = !!botNumber && !!sender && (sender === botNumber || sender.endsWith(botNumber) || botNumber.endsWith(sender));
 
-        // Cari log kirim terbaru dalam 10 menit yang belum ada reply.
+        // Anggap balasan dari bot apabila:
+        // - fromMe (device wablas sendiri yang membalas), ATAU
+        // - sender = bot_number yang dikonfigurasi, ATAU
+        // - bot_number belum dikonfigurasi (single-bot assumption)
+        const treatAsBotReply = fromMe || senderMatchesBot || !botNumber;
+
         let matchedId: string | null = null;
-        if (senderIsBot) {
+        if (treatAsBotReply) {
           const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-          const { data: pending } = await supabaseAdmin
+          const { data: pendingAll } = await supabaseAdmin
             .from("wa_send_log")
-            .select("id")
+            .select("id, feature_id, command_sent, created_at")
             .eq("status", "sent")
             .is("reply", null)
             .gte("created_at", cutoff)
             .order("created_at", { ascending: false })
-            .limit(1);
-          if (pending && pending.length > 0) {
-            matchedId = (pending[0] as any).id as string;
+            .limit(20);
+
+          const pending = (pendingAll ?? []) as Array<{ id: string; feature_id: string; command_sent: string }>;
+          if (pending.length > 0) {
+            // Coba cocokkan berdasar prefix command bot (mis. /namacek → feature "nama").
+            const lower = message.toLowerCase();
+            const byFeature = pending.find((p) => {
+              const fid = String(p.feature_id ?? "").toLowerCase();
+              const cmd = String(p.command_sent ?? "").toLowerCase().split(/\s+/)[0] ?? "";
+              return (fid && lower.includes(fid)) || (cmd && lower.includes(cmd.replace(/^\//, "")));
+            });
+            matchedId = (byFeature ?? pending[0]).id;
             await supabaseAdmin
               .from("wa_send_log")
               .update({ reply: message, reply_at: new Date().toISOString(), reply_sender: sender })
@@ -120,7 +133,7 @@ export const Route = createFileRoute("/api/public/wa/incoming")({
           matched_log_id: matchedId,
         });
 
-        return json({ ok: true, matched: matchedId });
+        return json({ ok: true, matched: matchedId, treatedAsBotReply: treatAsBotReply });
       },
     },
   },
