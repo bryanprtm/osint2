@@ -6,9 +6,11 @@ export type WaProvider = "fonnte" | "wablas";
 export type WaSettingsPublic = {
   provider: WaProvider;
   bot_number: string;
+  subdomain: string;
   enabled: boolean;
   commands: Record<string, string>;
   has_token: boolean;
+  has_secret: boolean;
   updated_at: string;
 };
 
