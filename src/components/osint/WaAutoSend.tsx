@@ -3,6 +3,8 @@ import { MessageCircle, Loader2, Check, X, MessagesSquare } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getWaSettings, sendWaLookup, getWaReply, type WaSettingsPublic } from "@/lib/wa-gateway.functions";
 import { useAuth } from "@/lib/auth";
+import { WaHistory } from "@/components/osint/WaHistory";
+
 
 const POLL_INTERVAL_MS = 4000;
 const POLL_TIMEOUT_MS = 120_000; // 2 menit
