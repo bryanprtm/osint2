@@ -229,9 +229,11 @@ function AdminPage() {
         data: {
           provider: waProvider,
           bot_number: waBotNumber,
+          subdomain: waSubdomain,
           enabled: waEnabled,
           commands: waCommands,
           api_token: waToken.trim() || undefined,
+          secret_key: waSecret.trim() || undefined,
         },
       });
       if (!r?.ok) {
@@ -240,6 +242,7 @@ function AdminPage() {
       }
       applyWaSettings(r.settings);
       setWaToken("");
+      setWaSecret("");
       setWaNote("Konfigurasi WhatsApp tersimpan.");
       const l = await fetchWaLog({ data: { limit: 20 } });
       setWaLog(l?.rows ?? []);
