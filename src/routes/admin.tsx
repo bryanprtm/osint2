@@ -5,9 +5,11 @@ import { Sidebar } from "@/components/osint/Sidebar";
 import { StatusBar } from "@/components/osint/StatusBar";
 import {
   Plus, Trash2, Pencil, Eye, EyeOff, Send, Save, ArrowLeft, RotateCcw, ShieldCheck, Check, X,
-  UserPlus, Users as UsersIcon, KeyRound, Loader2,
+  UserPlus, Users as UsersIcon, KeyRound, Loader2, MessageCircle,
 } from "lucide-react";
 import { listUsers, createUser, updateUser, deleteUser, type AppUserRow } from "@/lib/users.functions";
+import { DEFAULT_WA_COMMANDS, loadWaConfig, saveWaConfig, sanitizePhone, type WaConfig } from "@/lib/whatsapp";
+
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
@@ -51,6 +53,12 @@ function AdminPage() {
   const [tgChat, setTgChat] = useState(settings.telegramChatId);
   const [tgEnabled, setTgEnabled] = useState(settings.telegramEnabled);
   const [savedNote, setSavedNote] = useState("");
+
+  // --- WhatsApp bot state ---
+  const [waCfg, setWaCfg] = useState<WaConfig>({ enabled: false, phone: "", commands: { ...DEFAULT_WA_COMMANDS } });
+  const [waNote, setWaNote] = useState("");
+  useEffect(() => { setWaCfg(loadWaConfig()); }, []);
+
 
   // --- Users state ---
   const [users, setUsers] = useState<AppUserRow[]>([]);
@@ -182,6 +190,18 @@ function AdminPage() {
     setSavedNote("Konfigurasi Telegram tersimpan.");
     setTimeout(() => setSavedNote(""), 2500);
   };
+
+  const saveWhatsapp = () => {
+    const clean: WaConfig = { ...waCfg, phone: sanitizePhone(waCfg.phone) };
+    saveWaConfig(clean);
+    setWaCfg(clean);
+    setWaNote("Konfigurasi WhatsApp tersimpan (disimpan di browser).");
+    setTimeout(() => setWaNote(""), 2800);
+  };
+  const setWaCommand = (fid: string, val: string) =>
+    setWaCfg((c) => ({ ...c, commands: { ...c.commands, [fid]: val } }));
+
+
 
   return (
     <div className="min-h-screen flex w-full">
@@ -332,7 +352,78 @@ function AdminPage() {
               </div>
             </div>
 
+            {/* === WHATSAPP BOT === */}
+            <h2 className="text-xs font-mono uppercase tracking-[0.3em] text-cyber pt-2">▸ Integrasi WhatsApp Bot</h2>
+            <div className="panel-frame corner-brackets rounded-sm p-4 space-y-3">
+              <div className="flex items-center gap-2 text-cyber pb-2 border-b border-border">
+                <MessageCircle className="w-4 h-4" />
+                <span className="text-xs font-mono uppercase tracking-[0.25em]">Bot WhatsApp (Deep Link)</span>
+              </div>
+
+              <Field
+                label="Nomor Bot WhatsApp (format internasional, tanpa +)"
+                value={waCfg.phone}
+                onChange={(v) => setWaCfg({ ...waCfg, phone: v })}
+                placeholder="628123456789"
+                mono full
+              />
+
+              <label className="flex items-center gap-2 text-xs pt-1">
+                <input
+                  type="checkbox"
+                  checked={waCfg.enabled}
+                  onChange={(e) => setWaCfg({ ...waCfg, enabled: e.target.checked })}
+                />
+                <span className="font-mono tracking-wider text-muted-foreground">
+                  AKTIFKAN TOMBOL "KIRIM KE BOT WHATSAPP" DI MODUL
+                </span>
+              </label>
+
+              <div className="pt-2 border-t border-border space-y-2">
+                <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                  Perintah per modul (prefix, contoh: <span className="text-cyber">/nikdetail</span>)
+                </div>
+                <div className="grid grid-cols-2 gap-2 max-h-64 overflow-auto pr-1">
+                  {modules.filter((m) => m.enabled).map((m) => (
+                    <div key={m.id} className="space-y-1">
+                      <div className="text-[10px] font-mono text-muted-foreground truncate" title={m.name}>
+                        {m.name}
+                      </div>
+                      <input
+                        value={waCfg.commands[m.id] ?? ""}
+                        onChange={(e) => setWaCommand(m.id, e.target.value)}
+                        placeholder="/perintah"
+                        className="w-full bg-input/40 border border-border focus:border-cyber outline-none px-2 py-1 rounded-sm text-xs font-mono"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="text-[10px] font-mono text-muted-foreground leading-relaxed">
+                  Kosongkan perintah untuk menyembunyikan tombol WA pada modul tersebut. Format
+                  final yang dikirim ke bot: <span className="text-cyber">/perintah + input user</span> (mis. <span className="text-cyber">/nikdetail3275110203970007</span>).
+                </div>
+              </div>
+
+              <button onClick={saveWhatsapp} className="w-full flex items-center justify-center gap-2 py-2 rounded-sm bg-cyber text-primary-foreground font-semibold tracking-wider text-xs glow-cyber hover:bg-cyber-glow uppercase">
+                <Save className="w-3.5 h-3.5" /> Simpan Konfigurasi WA
+              </button>
+
+              {waNote && (
+                <div className="flex items-center gap-2 text-[11px] text-success border border-success/30 bg-success/10 px-2 py-1.5 rounded-sm">
+                  <Check className="w-3.5 h-3.5" /> {waNote}
+                </div>
+              )}
+
+              <div className="text-[10px] font-mono text-muted-foreground border-t border-border pt-2 leading-relaxed">
+                <div>1. Admin scan sekali di WhatsApp Web / WhatsApp Desktop pada perangkat ini.</div>
+                <div>2. User klik tombol <span className="text-success">Kirim ke Bot WhatsApp</span> pada modul → WhatsApp Web terbuka dengan perintah sudah terisi.</div>
+                <div>3. Tinggal tekan <span className="text-cyber">Enter</span> untuk mengirim ke bot dan lihat balasannya.</div>
+                <div className="pt-1 opacity-70">Konfigurasi disimpan di browser (localStorage) admin ini.</div>
+              </div>
+            </div>
+
             {/* === USERS MANAGEMENT === */}
+
             <h2 className="text-xs font-mono uppercase tracking-[0.3em] text-cyber pt-2">▸ Manajemen Pengguna</h2>
             <div className="panel-frame corner-brackets rounded-sm p-4 space-y-3">
               <div className="flex items-center gap-2 text-cyber pb-2 border-b border-border">

@@ -3,6 +3,8 @@ import type { Feature } from "@/lib/osint-data";
 import { Cpu, Search, Loader2, RefreshCw } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getBpjsCaptcha } from "@/lib/lookup.functions";
+import { WaSendButton } from "@/components/osint/WaSendButton";
+
 
 export function BpjsConsole({
   feature,
@@ -132,6 +134,9 @@ export function BpjsConsole({
         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
         {loading ? "Memverifikasi..." : "Verifikasi BPJS"}
       </button>
+
+      <WaSendButton featureId={feature.id} query={nik} />
     </form>
   );
 }
+
