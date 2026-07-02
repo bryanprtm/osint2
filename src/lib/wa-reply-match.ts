@@ -118,11 +118,20 @@ export function scoreWaReplyMatch(
   const featureText = String(candidate.feature_id ?? "").toLowerCase().trim();
   const recency = Math.max(0, 30 * 60 * 1000 - diffMs) / 1000;
 
+  // Strong header match: bot reply like "Result For <query>" is a definitive signal.
+  const headerMatch = /result\s+for\s*[:\-]?\s*([a-z0-9]+)/i.exec(message);
+  const headerToken = headerMatch ? normalizeLookupText(headerMatch[1]) : "";
+  const strongHeaderHit = !!headerToken && !!normalizedQuery && headerToken === normalizedQuery;
+  const strongQueryHit = !!normalizedQuery && normalizedQuery.length >= 8 && normalizedMessage.includes(normalizedQuery);
+
   let score = 0;
   if (intentHit) score += 50_000;
-  if (hasIntent && !intentHit) score -= 40_000;
+  // Only penalize intent mismatch when we have no other strong signal linking this reply.
+  if (hasIntent && !intentHit && !strongHeaderHit && !strongQueryHit) score -= 40_000;
 
-  if (normalizedQuery && normalizedQuery.length >= 3 && normalizedMessage.includes(normalizedQuery)) {
+  if (strongHeaderHit) {
+    score += 60_000 + normalizedQuery.length * 200;
+  } else if (normalizedQuery && normalizedQuery.length >= 3 && normalizedMessage.includes(normalizedQuery)) {
     score += 20_000 + normalizedQuery.length * 100;
   } else if (queryText && lower.includes(queryText)) {
     score += 10_000 + queryText.length * 100;
@@ -131,6 +140,7 @@ export function scoreWaReplyMatch(
   if (commandText && lower.includes(commandText)) score += 5_000 + commandText.length * 50;
   if (featureText && lower.includes(featureText)) score += 3_000 + featureText.length * 25;
   if (!hasIntent && messageMentionsAnyKey(message, keys)) score += 2_000;
+
 
   if (score > 0) return score + recency;
   if (!allowTimeFallback || hasIntent) return -1;
