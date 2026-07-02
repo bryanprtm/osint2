@@ -153,7 +153,7 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
           <div className="flex items-center gap-1.5">
             <Lock className="w-3 h-3 shrink-0" />
             <span className="break-words">
-              Ada permintaan sebelumnya yang masih menunggu balasan bot: <b>{pending!.command}</b>. Tombol kirim dinonaktifkan sampai balasan diterima atau timeout 2 menit tercapai.
+              Ada permintaan sebelumnya yang masih menunggu balasan bot: <b>{pending!.command}</b>. Tombol kirim dinonaktifkan sampai balasan diterima atau timeout 5 menit tercapai.
             </span>
           </div>
         </div>
