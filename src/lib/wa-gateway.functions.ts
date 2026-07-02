@@ -457,7 +457,7 @@ export const listMyWaHistory = createServerFn({ method: "POST" })
 
 // ============= PENDING LOCK (global per user) =============
 // Kembalikan permintaan tertua yang masih menunggu balasan bot (status=sent, reply=null)
-// dalam 2 menit terakhir. Dipakai untuk mengunci tombol kirim agar balasan tidak tertukar.
+// dalam 5 menit terakhir. Dipakai untuk mengunci tombol kirim agar balasan tidak tertukar.
 export const getWaPending = createServerFn({ method: "POST" })
   .inputValidator((input: { username?: string }) =>
     z.object({ username: z.string().max(80).optional() }).parse(input ?? {}),
