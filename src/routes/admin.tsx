@@ -58,10 +58,13 @@ function AdminPage() {
   // --- WhatsApp Gateway state ---
   const [waProvider, setWaProvider] = useState<WaProvider>("fonnte");
   const [waBotNumber, setWaBotNumber] = useState("");
+  const [waSubdomain, setWaSubdomain] = useState("");
   const [waEnabled, setWaEnabled] = useState(false);
   const [waCommands, setWaCommands] = useState<Record<string, string>>({ ...DEFAULT_WA_COMMANDS });
   const [waToken, setWaToken] = useState("");
+  const [waSecret, setWaSecret] = useState("");
   const [waHasToken, setWaHasToken] = useState(false);
+  const [waHasSecret, setWaHasSecret] = useState(false);
   const [waNote, setWaNote] = useState("");
   const [waErr, setWaErr] = useState("");
   const [waBusy, setWaBusy] = useState(false);
@@ -73,9 +76,11 @@ function AdminPage() {
   const applyWaSettings = (s: WaSettingsPublic) => {
     setWaProvider(s.provider);
     setWaBotNumber(s.bot_number);
+    setWaSubdomain(s.subdomain ?? "");
     setWaEnabled(s.enabled);
     setWaCommands({ ...DEFAULT_WA_COMMANDS, ...(s.commands ?? {}) });
     setWaHasToken(s.has_token);
+    setWaHasSecret(s.has_secret);
   };
 
   useEffect(() => {
