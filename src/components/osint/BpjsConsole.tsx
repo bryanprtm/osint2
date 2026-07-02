@@ -134,6 +134,9 @@ export function BpjsConsole({
         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
         {loading ? "Memverifikasi..." : "Verifikasi BPJS"}
       </button>
+
+      <WaSendButton featureId={feature.id} query={nik} />
     </form>
   );
 }
+
