@@ -136,12 +136,25 @@ function buttonKind(btn) {
   return btn?.className || btn?.constructor?.name || "unknown";
 }
 
+function hasCallbackData(btn) {
+  return btn && Object.prototype.hasOwnProperty.call(btn, "data") && btn.data != null;
+}
+
 function isTextReplyButton(btn) {
   const kind = buttonKind(btn);
   // Reply-keyboard buttons are "clicked" by sending their text as a normal
   // outgoing message. Inline callback buttons must use msg.click().
-  return kind === "KeyboardButton" || kind === "KeyboardButtonSimple" ||
+  return !hasCallbackData(btn) && (kind === "KeyboardButton" || kind === "KeyboardButtonSimple" ||
     (kind.includes("KeyboardButton") && !kind.includes("Callback") && !kind.includes("Url"));
+}
+
+async function invokeCallbackButton(msg, btn) {
+  const peer = await client.getInputEntity(botEntity);
+  return client.invoke(new Api.messages.GetBotCallbackAnswer({
+    peer,
+    msgId: msg.id,
+    data: btn.data,
+  }));
 }
 
 async function clickButtonByText(msg, label) {
@@ -155,6 +168,11 @@ async function clickButtonByText(msg, label) {
         const text = btn.text || label;
         const kind = buttonKind(btn);
         try {
+          if (hasCallbackData(btn)) {
+            console.log(`[bridge] invoke callback button: ${text} (${kind})`);
+            await invokeCallbackButton(msg, btn);
+            return true;
+          }
           if (isTextReplyButton(btn)) {
             console.log(`[bridge] send reply-keyboard button: ${text}`);
             await sendToBot(text);
