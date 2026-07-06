@@ -104,10 +104,20 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
     }, POLL_TIMEOUT_MS);
   }
 
-  if (!settings) return null;
-  const cmd = settings.commands?.[featureId]?.trim();
-  const ready = settings.enabled && settings.bot_number && settings.has_token && !!cmd;
-  if (!ready) return null;
+  // Enigma bot pakai bridge Telegram (selalu tersedia jika secret terkonfigurasi di server).
+  // Modul non-enigma mengikuti gating dari wa_gateway_settings (Fonnte/Wablas).
+  let cmd = "";
+  let botLabel = "";
+  if (isEnigma) {
+    cmd = enigmaLabel;
+    botLabel = "@enigmatoolsbot";
+  } else {
+    if (!settings) return null;
+    cmd = settings.commands?.[featureId]?.trim() ?? "";
+    const ready = settings.enabled && settings.bot_number && settings.has_token && !!cmd;
+    if (!ready) return null;
+    botLabel = settings.bot_number;
+  }
 
   const handle = async () => {
     if (!query.trim()) return;
@@ -116,7 +126,9 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
     setReply(null);
     setLogId(null);
     try {
-      const r = await send({ data: { featureId, query, username: user?.username } });
+      const r = isEnigma
+        ? await sendTg({ data: { featureId, query, username: user?.username } })
+        : await send({ data: { featureId, query, username: user?.username } });
       setMsg({ ok: !!r?.ok, text: r?.message ?? "" });
       if (r?.ok && r.logId) {
         setLogId(r.logId);
@@ -135,6 +147,9 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
   const locked = !!pending && pending.logId !== logId;
   const lockAgeSec = pending ? Math.max(0, Math.floor((Date.now() - new Date(pending.created_at).getTime()) / 1000)) : 0;
 
+  const btnLabel = isEnigma ? "Kirim ke Bot Enigma (Telegram)" : "Kirim ke Bot WhatsApp";
+  const BtnIcon = isEnigma ? Send : MessageCircle;
+
   return (
     <div className="space-y-1.5">
       <button
@@ -142,16 +157,16 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
         onClick={handle}
         disabled={sending || waitingReply || locked || !query.trim()}
         className="w-full flex items-center justify-center gap-2 py-2 rounded-sm border border-success/50 text-success hover:bg-success/10 transition-colors font-mono uppercase tracking-wider text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-        title={locked ? `Menunggu balasan bot untuk "${pending!.command}"` : `Kirim "${cmd} ${query}" ke ${settings.bot_number}`}
+        title={locked ? `Menunggu balasan bot untuk "${pending!.command}"` : `Kirim "${cmd} ${query}" ke ${botLabel}`}
       >
-        {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : locked ? <Lock className="w-3.5 h-3.5" /> : <MessageCircle className="w-3.5 h-3.5" />}
+        {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : locked ? <Lock className="w-3.5 h-3.5" /> : <BtnIcon className="w-3.5 h-3.5" />}
         {sending
           ? "Mengirim..."
           : waitingReply
             ? `Menunggu balasan bot... (${waitElapsed}s)`
             : locked
               ? `Terkunci — tunggu balasan bot (${lockAgeSec}s)`
-              : "Kirim ke Bot WhatsApp"}
+              : btnLabel}
       </button>
 
       {locked && (
