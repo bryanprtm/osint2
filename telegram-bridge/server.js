@@ -6,6 +6,8 @@ const { StringSession } = require("telegram/sessions");
 const { NewMessage } = require("telegram/events");
 const featuresMap = require("./features.json");
 
+const BRIDGE_VERSION = "2026-07-06-click-prompt-v2";
+
 const {
   TG_API_ID,
   TG_API_HASH,
@@ -387,7 +389,7 @@ async function main() {
   const app = express();
   app.use(express.json({ limit: "1mb" }));
 
-  app.get("/health", (_req, res) => res.json({ ok: true, bot: TG_BOT_TARGET, botId: botIdStr }));
+  app.get("/health", (_req, res) => res.json({ ok: true, version: BRIDGE_VERSION, bot: TG_BOT_TARGET, botId: botIdStr }));
 
   app.post("/run", async (req, res) => {
     const sig = req.header("X-Bridge-Signature") || "";
