@@ -132,6 +132,34 @@ async function sendToBot(text) {
 
 function normalize(s) { return String(s || "").replace(/\s+/g, " ").trim(); }
 
+function buttonKind(btn) {
+  return btn?.className || btn?.constructor?.name || "unknown";
+}
+
+function hasCallbackData(btn) {
+  return btn && Object.prototype.hasOwnProperty.call(btn, "data") && btn.data != null;
+}
+
+function isTextReplyButton(btn) {
+  const kind = buttonKind(btn);
+  // Reply-keyboard buttons are "clicked" by sending their text as a normal
+  // outgoing message. Inline callback buttons must use msg.click().
+  return !hasCallbackData(btn) && (
+    kind === "KeyboardButton" ||
+    kind === "KeyboardButtonSimple" ||
+    (kind.includes("KeyboardButton") && !kind.includes("Callback") && !kind.includes("Url"))
+  );
+}
+
+async function invokeCallbackButton(msg, btn) {
+  const peer = await client.getInputEntity(botEntity);
+  return client.invoke(new Api.messages.GetBotCallbackAnswer({
+    peer,
+    msgId: msg.id,
+    data: btn.data,
+  }));
+}
+
 async function clickButtonByText(msg, label) {
   if (!msg?.replyMarkup?.rows) return false;
   const want = normalize(label);
@@ -140,11 +168,32 @@ async function clickButtonByText(msg, label) {
     for (let j = 0; j < row.buttons.length; j++) {
       const btn = row.buttons[j];
       if (normalize(btn.text) === want) {
+        const text = btn.text || label;
+        const kind = buttonKind(btn);
         try {
+          if (hasCallbackData(btn)) {
+            console.log(`[bridge] invoke callback button: ${text} (${kind})`);
+            await invokeCallbackButton(msg, btn);
+            return true;
+          }
+          if (isTextReplyButton(btn)) {
+            console.log(`[bridge] send reply-keyboard button: ${text}`);
+            await sendToBot(text);
+            return true;
+          }
+          console.log(`[bridge] click inline button: ${text} (${kind})`);
           await msg.click({ i, j });
           return true;
         } catch (e) {
-          console.error("[bridge] click error:", e.message);
+          // Some Telegram bot menus expose reply-keyboard buttons inside
+          // replyMarkup, but GramJS cannot "click" them like inline buttons.
+          // Fallback to the exact button text, which is what the Telegram
+          // client sends when a user taps that button.
+          console.warn(`[bridge] click error for ${text} (${kind}), fallback send text:`, e.message);
+          if (text) {
+            await sendToBot(text);
+            return true;
+          }
           return false;
         }
       }
