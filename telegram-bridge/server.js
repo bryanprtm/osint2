@@ -232,23 +232,74 @@ async function clickButtonByText(msg, label) {
   return false;
 }
 
-async function findMenuMessageWithButton(label, waitMs) {
-  const deadline = Date.now() + waitMs;
-  // Cek pesan yang sudah ada dulu (paling baru dulu)
+function describeButtons(msg) {
+  if (!msg?.replyMarkup?.rows) return "no-buttons";
+  return msg.replyMarkup.rows
+    .map((row) => row.buttons.map((b) => `${b.text || "?"}<${buttonKind(b)}${hasCallbackData(b) ? ":callback" : ""}>`).join(" | "))
+    .join(" || ");
+}
+
+async function fetchRecentBotMessages(limit = 10) {
+  try {
+    const messages = await client.getMessages(botEntity, { limit });
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg && !msg.out) pushInbox(msg, { collect: false });
+    }
+  } catch (e) {
+    console.warn("[bridge] getMessages gagal:", e.message);
+  }
+}
+
+function findCachedMessageWithButton(label, afterAt = 0) {
   for (let i = inbox.length - 1; i >= 0; i--) {
     const it = inbox[i];
+    if (it.at < afterAt) continue;
     if (it.msg?.replyMarkup?.rows) {
       const has = it.msg.replyMarkup.rows.some((r) => r.buttons.some((b) => normalize(b.text) === normalize(label)));
       if (has) return it.msg;
     }
   }
+  return null;
+}
+
+async function findMenuMessageWithButton(label, waitMs, { afterAt = 0, includeHistory = true } = {}) {
+  const deadline = Date.now() + waitMs;
+  if (includeHistory) await fetchRecentBotMessages(12);
+  const cached = findCachedMessageWithButton(label, afterAt);
+  if (cached) {
+    console.log(`[bridge] found button "${label}" in message ${cached.id}: ${describeButtons(cached)}`);
+    return cached;
+  }
   while (Date.now() < deadline) {
     const next = await waitNextBotMessage(deadline - Date.now());
     if (!next) return null;
+    if (next.at < afterAt) continue;
     if (next.msg?.replyMarkup?.rows) {
       const has = next.msg.replyMarkup.rows.some((r) => r.buttons.some((b) => normalize(b.text) === normalize(label)));
-      if (has) return next.msg;
+      if (has) {
+        console.log(`[bridge] found button "${label}" in new message ${next.msg.id}: ${describeButtons(next.msg)}`);
+        return next.msg;
+      }
     }
+  }
+  return null;
+}
+
+function hasAnyButtons(msg) {
+  return !!msg?.replyMarkup?.rows?.some((r) => r.buttons?.length);
+}
+
+async function waitForFeaturePrompt(afterAt, waitMs) {
+  const deadline = Date.now() + waitMs;
+  while (Date.now() < deadline) {
+    const next = await waitNextBotMessage(deadline - Date.now());
+    if (!next || next.at < afterAt) continue;
+    const text = next.text || "";
+    if (!text.trim()) continue;
+    if (isMenuOrWelcomeText(text)) continue;
+    if (hasAnyButtons(next.msg)) continue;
+    return next;
   }
   return null;
 }
@@ -261,14 +312,17 @@ async function runFeature({ requestId, feature, query }) {
   inbox.length = 0;
 
   // 1. /start → dapatkan menu welcome dengan tombol "Menu Utama"
+  const startAt = Date.now();
   await sendToBot("/start");
-  let menuMsg = await findMenuMessageWithButton("🏠 Menu Utama", menuWait);
+  let menuMsg = await findMenuMessageWithButton("🏠 Menu Utama", menuWait, { afterAt: startAt - 500, includeHistory: false });
 
   // 2. Klik "Menu Utama" untuk buka daftar fitur
   if (menuMsg) {
+    const clickedAt = Date.now();
     const okClick = await clickButtonByText(menuMsg, "🏠 Menu Utama");
     if (!okClick) console.warn("[bridge] gagal klik Menu Utama");
     await sleep(buttonDelay);
+    await fetchRecentBotMessages(8);
   } else {
     console.warn("[bridge] tidak menemukan tombol Menu Utama setelah /start");
   }
@@ -278,11 +332,17 @@ async function runFeature({ requestId, feature, query }) {
   if (!featureMsg) {
     return { ok: false, error: `tombol "${buttonLabel}" tidak ditemukan di menu bot` };
   }
+  const featureClickedAt = Date.now();
   const clicked = await clickButtonByText(featureMsg, buttonLabel);
   if (!clicked) return { ok: false, error: `gagal klik tombol "${buttonLabel}"` };
 
-  // 4. Beri jeda supaya bot kirim prompt "masukkan …"
-  await sleep(buttonDelay);
+  // 4. Tunggu prompt/input dari fitur. Jika yang muncul hanya welcome/menu,
+  // jangan lanjut kirim query karena berarti tombol fitur belum aktif.
+  const prompt = await waitForFeaturePrompt(featureClickedAt, Math.max(menuWait, buttonDelay * 3));
+  if (!prompt) {
+    return { ok: false, error: `tombol "${buttonLabel}" belum membuka prompt input. Yang diterima masih menu/welcome; cek apakah label di features.json persis dengan tombol bot.` };
+  }
+  console.log(`[bridge] feature prompt: ${(prompt.text || "").slice(0, 100).replace(/\n/g, " ")}`);
 
   // 5. Kirim query & kumpulkan balasan
   const collector = collectReply(requestId);
