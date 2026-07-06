@@ -144,8 +144,11 @@ function isTextReplyButton(btn) {
   const kind = buttonKind(btn);
   // Reply-keyboard buttons are "clicked" by sending their text as a normal
   // outgoing message. Inline callback buttons must use msg.click().
-  return !hasCallbackData(btn) && (kind === "KeyboardButton" || kind === "KeyboardButtonSimple" ||
-    (kind.includes("KeyboardButton") && !kind.includes("Callback") && !kind.includes("Url"));
+  return !hasCallbackData(btn) && (
+    kind === "KeyboardButton" ||
+    kind === "KeyboardButtonSimple" ||
+    (kind.includes("KeyboardButton") && !kind.includes("Callback") && !kind.includes("Url"))
+  );
 }
 
 async function invokeCallbackButton(msg, btn) {
