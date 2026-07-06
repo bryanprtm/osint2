@@ -53,17 +53,19 @@ export const Route = createFileRoute("/api/public/tg/incoming")({
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-        const patch: Record<string, unknown> = {
-          reply_at: new Date().toISOString(),
-          reply_sender: "@enigmatoolsbot",
-        };
-        if (okFlag && reply) {
-          patch.reply = reply;
-          patch.status = "sent";
-        } else {
-          patch.status = "failed";
-          patch.error = errText ?? "bridge returned no reply";
-        }
+        const patch = okFlag && reply
+          ? {
+              reply_at: new Date().toISOString(),
+              reply_sender: "@enigmatoolsbot",
+              reply,
+              status: "sent",
+            }
+          : {
+              reply_at: new Date().toISOString(),
+              reply_sender: "@enigmatoolsbot",
+              status: "failed",
+              error: errText ?? "bridge returned no reply",
+            };
 
         const { error } = await supabaseAdmin.from("wa_send_log").update(patch).eq("id", requestId);
         if (error) return json({ ok: false, error: error.message }, 500);
