@@ -32,18 +32,51 @@ function sign(secret: string, body: string): string {
   return createHmac("sha256", secret).update(body).digest("hex");
 }
 
-export const getTgBridgeStatus = createServerFn({ method: "GET" }).handler(async () => {
-  const url = process.env.TG_BRIDGE_URL ?? "";
-  const secret = process.env.TG_BRIDGE_SECRET ?? "";
-  if (!url || !secret) return { configured: false as const };
+type BridgeMode = "auto" | "mtproto" | "web";
+
+function getBridgeMode(): BridgeMode {
+  const m = (process.env.TG_BRIDGE_MODE ?? "auto").toLowerCase();
+  return (m === "web" || m === "mtproto" ? m : "auto") as BridgeMode;
+}
+
+async function probeHealth(url: string) {
   try {
     const res = await fetch(`${url.replace(/\/+$/, "")}/health`, { method: "GET" });
     const j = (await res.json().catch(() => ({}))) as any;
-    return { configured: true as const, ok: res.ok, bot: j?.bot ?? null, botId: j?.botId ?? null };
+    return { ok: res.ok, ...j };
   } catch (e) {
-    return { configured: true as const, ok: false, error: (e as Error).message };
+    return { ok: false, error: (e as Error).message };
   }
+}
+
+export const getTgBridgeStatus = createServerFn({ method: "GET" }).handler(async () => {
+  const mtUrl = process.env.TG_BRIDGE_URL ?? "";
+  const webUrl = process.env.TG_BRIDGE_URL_WEB ?? "";
+  const secret = process.env.TG_BRIDGE_SECRET ?? "";
+  const mode = getBridgeMode();
+  if (!secret || (!mtUrl && !webUrl)) return { configured: false as const, mode };
+  const [mt, web] = await Promise.all([
+    mtUrl ? probeHealth(mtUrl) : Promise.resolve(null),
+    webUrl ? probeHealth(webUrl) : Promise.resolve(null),
+  ]);
+  return { configured: true as const, mode, mtproto: mt, web };
 });
+
+async function callBridge(url: string, secret: string, payload: object) {
+  const body = JSON.stringify(payload);
+  const signature = sign(secret, body);
+  try {
+    const res = await fetch(`${url.replace(/\/+$/, "")}/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Bridge-Signature": signature },
+      body,
+    });
+    const text = await res.text();
+    return { ok: res.ok, status: res.status, text };
+  } catch (e) {
+    return { ok: false, status: 0, text: `fetch error: ${(e as Error).message}` };
+  }
+}
 
 export const sendTgLookup = createServerFn({ method: "POST" })
   .inputValidator((input: { featureId: string; query: string; username?: string }) =>
@@ -57,16 +90,19 @@ export const sendTgLookup = createServerFn({ method: "POST" })
     const label = ENIGMA_FEATURES[data.featureId];
     if (!label) return { ok: false as const, message: `Modul "${data.featureId}" bukan modul bot Enigma.` };
 
-    const url = (process.env.TG_BRIDGE_URL ?? "").replace(/\/+$/, "");
+    const mtUrl = process.env.TG_BRIDGE_URL ?? "";
+    const webUrl = process.env.TG_BRIDGE_URL_WEB ?? "";
     const secret = process.env.TG_BRIDGE_SECRET ?? "";
-    if (!url || !secret) return { ok: false as const, message: "Bridge Telegram belum dikonfigurasi (TG_BRIDGE_URL / TG_BRIDGE_SECRET)." };
+    const mode = getBridgeMode();
+    if (!secret || (!mtUrl && !webUrl)) {
+      return { ok: false as const, message: "Bridge Telegram belum dikonfigurasi (TG_BRIDGE_URL / TG_BRIDGE_URL_WEB / TG_BRIDGE_SECRET)." };
+    }
 
     const q = data.query.trim();
     if (!q) return { ok: false as const, message: "Query kosong." };
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // Bikin log dulu → id-nya jadi requestId ke bridge.
     const commandSent = `${label} ${q}`;
     const { data: inserted, error: insErr } = await supabaseAdmin
       .from("wa_send_log")
@@ -83,30 +119,38 @@ export const sendTgLookup = createServerFn({ method: "POST" })
     if (insErr || !inserted) return { ok: false as const, message: `Gagal buat log: ${insErr?.message ?? "unknown"}` };
     const logId = (inserted as any).id as string;
 
-    const body = JSON.stringify({ requestId: logId, feature: data.featureId, query: q });
-    const signature = sign(secret, body);
-
-    let result: { ok: boolean; status: number; text: string };
-    try {
-      const res = await fetch(`${url}/run`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Bridge-Signature": signature },
-        body,
-      });
-      const text = await res.text();
-      result = { ok: res.ok, status: res.status, text };
-    } catch (e) {
-      const errMsg = (e as Error).message;
-      await supabaseAdmin.from("wa_send_log").update({ status: "failed", error: `bridge fetch: ${errMsg}` }).eq("id", logId);
-      return { ok: false as const, message: `Gagal menghubungi bridge: ${errMsg}`, logId };
+    // Susun urutan bridge yang dicoba sesuai mode.
+    const targets: Array<{ name: "mtproto" | "web"; url: string }> = [];
+    if (mode === "mtproto" && mtUrl) targets.push({ name: "mtproto", url: mtUrl });
+    else if (mode === "web" && webUrl) targets.push({ name: "web", url: webUrl });
+    else {
+      if (mtUrl) targets.push({ name: "mtproto", url: mtUrl });
+      if (webUrl) targets.push({ name: "web", url: webUrl });
     }
 
-    if (!result.ok) {
-      await supabaseAdmin.from("wa_send_log").update({ status: "failed", error: `HTTP ${result.status}`, provider_response: result.text.slice(0, 2000) }).eq("id", logId);
-      return { ok: false as const, message: `Bridge menolak (HTTP ${result.status}): ${result.text.slice(0, 200)}`, logId };
+    const payload = { requestId: logId, feature: data.featureId, query: q };
+    const attempts: string[] = [];
+    let last: { ok: boolean; status: number; text: string } | null = null;
+    let usedProvider: string | null = null;
+
+    for (const t of targets) {
+      const r = await callBridge(t.url, secret, payload);
+      attempts.push(`${t.name}:${r.status}`);
+      last = r;
+      if (r.ok) { usedProvider = t.name; break; }
     }
 
-    await supabaseAdmin.from("wa_send_log").update({ status: "sent", provider_response: result.text.slice(0, 2000) }).eq("id", logId);
+    if (!last || !last.ok) {
+      const msg = `Semua bridge gagal (${attempts.join(", ")}): ${last?.text.slice(0, 200) ?? "no response"}`;
+      await supabaseAdmin.from("wa_send_log").update({ status: "failed", error: msg }).eq("id", logId);
+      return { ok: false as const, message: msg, logId };
+    }
 
-    return { ok: true as const, message: `Perintah "${commandSent}" dikirim ke bot Enigma. Menunggu balasan…`, logId };
+    await supabaseAdmin.from("wa_send_log").update({
+      status: "sent",
+      provider: `telegram_bridge:${usedProvider}`,
+      provider_response: last.text.slice(0, 2000),
+    }).eq("id", logId);
+
+    return { ok: true as const, message: `Perintah "${commandSent}" dikirim via ${usedProvider}. Menunggu balasan…`, logId, provider: usedProvider };
   });
