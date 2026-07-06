@@ -1,51 +1,67 @@
-## Tujuan
+## Konteks
 
-Bikin satu script `telegram-bridge/update_vps.sh` yang bisa dijalankan di VPS untuk narik versi terbaru `server.js` (dan `features.json`) dari repo Lovable published, install dependency baru kalau ada, lalu restart service `telegrambridge` dan verifikasi `/health` menunjukkan `BRIDGE_VERSION` terbaru.
+Sekarang bridge pakai **MTProto (GramJS)** — login sebagai user via `TG_SESSION`, kirim pesan & klik tombol lewat API resmi Telegram. Masalah: bot Enigma pakai **reply-keyboard** (bukan inline button), dan beberapa fitur tampaknya butuh interaksi UI yang tidak bisa direplikasi lewat MTProto (misal bot cek `via_bot`, WebApp button, atau anti-automation).
 
-## Isi script (garis besar)
+Alternatif yang kamu usulkan: **jalankan Telegram Web (web.telegram.org) di headless browser di VPS**, login sekali, lalu automation pakai Playwright/Puppeteer untuk klik tombol persis seperti user manusia. Ini fallback terakhir kalau MTProto tetap gagal.
+
+## Rencana: Bridge v2 berbasis Playwright (Telegram Web K)
+
+### Arsitektur
 
 ```text
-1. Variabel:
-   - BRIDGE_DIR (default: /opt/telegram-bridge)
-   - SERVICE_NAME (default: telegrambridge)
-   - REPO_RAW_BASE (URL raw file server.js dari GitHub / sumber user)
-   - BRIDGE_PORT (default: 8787)
-   - BRIDGE_SECRET (dibaca dari .env existing)
-
-2. Langkah:
-   a. cd $BRIDGE_DIR
-   b. Backup server.js -> server.js.bak.<timestamp>
-   c. curl -fsSL $REPO_RAW_BASE/server.js -o server.js.new
-      curl -fsSL $REPO_RAW_BASE/features.json -o features.json.new
-   d. node -c server.js.new  (syntax check)
-   e. mv server.js.new server.js ; mv features.json.new features.json
-   f. Kalau package.json berubah / node_modules kosong -> npm install --omit=dev
-   g. systemctl restart $SERVICE_NAME
-   h. sleep 3
-   i. curl -s http://127.0.0.1:$BRIDGE_PORT/health -> print JSON, cek field `version`
-   j. Rollback otomatis kalau health gagal (restore .bak) + tampilkan `journalctl -u $SERVICE_NAME -n 40`
-
-3. Output berwarna (echo) supaya jelas step mana yang sukses/gagal.
+Lovable app  --HTTP /run-->  bridge-web (Node + Playwright)
+                                  |
+                                  v
+                            Chromium headless
+                                  |
+                                  v
+                       https://web.telegram.org/k/
+                       (session tersimpan di userDataDir)
+                                  |
+                                  v
+                            Bot @EnigmaOSINT
 ```
 
-## Pertanyaan singkat (biar script langsung jalan)
+### Komponen baru di folder `telegram-bridge-web/`
 
-Sebelum saya generate file-nya, saya butuh 1 keputusan: **sumber file `server.js` terbaru di VPS mau diambil dari mana?**
+1. **`package.json`** — deps: `express`, `playwright`, `dotenv`. Script `login` (buka browser non-headless untuk scan QR sekali), `start` (headless daemon).
+2. **`login.js`** — jalankan Chromium **headed** dengan `userDataDir=./chrome-profile`, buka `https://web.telegram.org/k/`, user scan QR dari HP. Setelah login, tutup — sesi tersimpan di profil Chromium.
+3. **`server.js`** — HTTP server mirip bridge lama (`/health`, `/run`, `/debug/menu`), tapi driver-nya Playwright:
+   - Boot: launch Chromium **headless** dengan `userDataDir` yang sama, buka chat bot via URL `https://web.telegram.org/k/#@EnigmaOSINT`.
+   - `runFeature(feature, query)`:
+     a. Ketik `/start` di composer, tekan Enter.
+     b. Tunggu pesan bot terakhir muncul (poll DOM `.message`).
+     c. Klik tombol "🏠 Menu Utama" via `page.getByRole('button', { name: '🏠 Menu Utama' })`.
+     d. Klik tombol fitur (label dari `features.json`).
+     e. Tunggu prompt input, lalu ketik `query` + Enter.
+     f. Collect balasan bot (loop tunggu bubble baru sampai quiet 6 detik), kirim ke `CALLBACK_URL`.
+   - Screenshot debug ke `./debug/*.png` kalau step gagal (buat troubleshooting).
+4. **`install_vps.sh`** — install Chromium deps (`playwright install-deps chromium`), buat systemd unit `telegrambridge-web.service`, buka port 8788.
+5. **`update_vps.sh`** — mirip yang sudah ada, tapi untuk service baru.
+6. **`README.md`** — cara login pertama kali (jalankan `login.js` via `xvfb-run` atau tunnel X11 / pakai VNC sekali; alternatif: login di laptop, copy folder `chrome-profile/` ke VPS via `scp -r`).
 
-Pilihan:
-- **A. GitHub repo user** — user kasih URL raw seperti `https://raw.githubusercontent.com/<user>/<repo>/main/telegram-bridge`
-- **B. Copy manual via scp** — script hanya melakukan backup + syntax check + restart + health check, file baru user upload sendiri pakai `scp`
-- **C. Endpoint Lovable published** — kurang cocok karena `server.js` bukan asset publik
+### Perubahan di app Lovable
 
-Rekomendasi saya: **B** (paling simpel & aman, tanpa perlu setup repo). Kalau setuju, script akan dipakai begini di VPS:
+- `src/lib/tg-bridge.functions.ts`: tambah env `TG_BRIDGE_URL_WEB` sebagai fallback. Logic:
+  1. Coba `TG_BRIDGE_URL` (MTProto) dulu.
+  2. Kalau gagal (`ok:false` dengan error klik/timeout) atau timeout, retry ke `TG_BRIDGE_URL_WEB` (Playwright).
+- Feature flag `TG_BRIDGE_MODE=mtproto|web|auto` di secrets.
 
-```bash
-# di lokal
-scp telegram-bridge/server.js root@vps:/opt/telegram-bridge/server.js.new
-# di VPS
-cd /opt/telegram-bridge && ./update_vps.sh
-```
+### Trade-off yang perlu kamu tahu
 
-Script `update_vps.sh` akan otomatis: syntax-check `server.js.new`, backup lama, ganti, `npm install` kalau perlu, `systemctl restart telegrambridge`, dan verifikasi `/health` menampilkan `2026-07-06-mtproto-callback-v3`. Rollback otomatis kalau gagal.
+| Aspek | MTProto (sekarang) | Playwright Web (usulan) |
+|---|---|---|
+| Resource VPS | ~80MB RAM | ~400–600MB RAM (Chromium headless) |
+| Setup | 1 file `.env` | + login QR, Chromium deps (~300MB) |
+| Reliabilitas klik | Gagal untuk reply-keyboard tertentu | Sama seperti user manusia — hampir pasti jalan |
+| Risk banned Telegram | Rendah | Sedang (automation di web client bisa dideteksi) |
+| Deteksi UI berubah | Stabil (pakai API) | Perlu update selector kalau Telegram Web ganti layout |
 
-Balas **A / B / C** (atau kasih URL kalau pilih A) dan saya langsung buatkan file-nya di mode build.
+### Pertanyaan sebelum saya generate file
+
+1. **Spec VPS**: RAM ≥ 1GB free? Chromium headless butuh ~500MB. Kalau VPS kecil, kita perlu swap dulu.
+2. **Cara login pertama**: (a) kamu bisa jalankan `xvfb-run` + VNC sekali di VPS untuk scan QR, atau (b) login di laptop lalu `scp -r chrome-profile/` ke VPS?
+3. **Mode fallback**: mau `auto` (coba MTProto dulu, fallback ke web) atau langsung `web` saja untuk semua request?
+4. **Tetap pertahankan bridge MTProto lama** di folder `telegram-bridge/`, atau ganti total?
+
+Jawab 4 pertanyaan itu dan saya lanjut ke build mode untuk generate semua file (`telegram-bridge-web/*`, update `tg-bridge.functions.ts`, `update_vps.sh` versi web).

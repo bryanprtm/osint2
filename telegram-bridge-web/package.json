@@ -1,0 +1,17 @@
+{
+  "name": "telegram-bridge-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fallback bridge: automate Telegram Web (web.telegram.org/k) via Playwright to click bot reply-keyboard buttons like a human user.",
+  "main": "server.js",
+  "scripts": {
+    "login": "node login.js",
+    "start": "node server.js",
+    "postinstall": "playwright install chromium"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "playwright": "^1.47.0"
+  }
+}
