@@ -14,6 +14,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicWaIncomingRouteImport } from './routes/api/public/wa/incoming'
+import { Route as ApiPublicTgIncomingRouteImport } from './routes/api/public/tg/incoming'
 
 const OsirisRoute = OsirisRouteImport.update({
   id: '/osiris',
@@ -40,12 +41,18 @@ const ApiPublicWaIncomingRoute = ApiPublicWaIncomingRouteImport.update({
   path: '/api/public/wa/incoming',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicTgIncomingRoute = ApiPublicTgIncomingRouteImport.update({
+  id: '/api/public/tg/incoming',
+  path: '/api/public/tg/incoming',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
   '/osiris': typeof OsirisRoute
+  '/api/public/tg/incoming': typeof ApiPublicTgIncomingRoute
   '/api/public/wa/incoming': typeof ApiPublicWaIncomingRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
   '/osiris': typeof OsirisRoute
+  '/api/public/tg/incoming': typeof ApiPublicTgIncomingRoute
   '/api/public/wa/incoming': typeof ApiPublicWaIncomingRoute
 }
 export interface FileRoutesById {
@@ -61,19 +69,33 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
   '/osiris': typeof OsirisRoute
+  '/api/public/tg/incoming': typeof ApiPublicTgIncomingRoute
   '/api/public/wa/incoming': typeof ApiPublicWaIncomingRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/login' | '/osiris' | '/api/public/wa/incoming'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/login'
+    | '/osiris'
+    | '/api/public/tg/incoming'
+    | '/api/public/wa/incoming'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/login' | '/osiris' | '/api/public/wa/incoming'
+  to:
+    | '/'
+    | '/admin'
+    | '/login'
+    | '/osiris'
+    | '/api/public/tg/incoming'
+    | '/api/public/wa/incoming'
   id:
     | '__root__'
     | '/'
     | '/admin'
     | '/login'
     | '/osiris'
+    | '/api/public/tg/incoming'
     | '/api/public/wa/incoming'
   fileRoutesById: FileRoutesById
 }
@@ -82,6 +104,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   LoginRoute: typeof LoginRoute
   OsirisRoute: typeof OsirisRoute
+  ApiPublicTgIncomingRoute: typeof ApiPublicTgIncomingRoute
   ApiPublicWaIncomingRoute: typeof ApiPublicWaIncomingRoute
 }
 
@@ -122,6 +145,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicWaIncomingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/tg/incoming': {
+      id: '/api/public/tg/incoming'
+      path: '/api/public/tg/incoming'
+      fullPath: '/api/public/tg/incoming'
+      preLoaderRoute: typeof ApiPublicTgIncomingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -130,17 +160,9 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   LoginRoute: LoginRoute,
   OsirisRoute: OsirisRoute,
+  ApiPublicTgIncomingRoute: ApiPublicTgIncomingRoute,
   ApiPublicWaIncomingRoute: ApiPublicWaIncomingRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}
