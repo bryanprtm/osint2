@@ -28,12 +28,17 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
 
   const load = useServerFn(getWaSettings);
   const send = useServerFn(sendWaLookup);
+  const sendTg = useServerFn(sendTgLookup);
   const fetchReply = useServerFn(getWaReply);
   const fetchPending = useServerFn(getWaPending);
 
+  const isEnigma = ENIGMA_FEATURE_IDS.has(featureId);
+  const enigmaLabel = ENIGMA_FEATURES[featureId] ?? "";
+
   useEffect(() => {
+    if (isEnigma) { setSettings(null); return; }
     void load().then((r) => setSettings(r?.settings ?? null)).catch(() => setSettings(null));
-  }, [load]);
+  }, [load, isEnigma]);
 
   // Cek lock global: apakah ada permintaan lain yang belum dibalas bot
   useEffect(() => {
