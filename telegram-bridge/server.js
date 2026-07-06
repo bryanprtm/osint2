@@ -56,17 +56,27 @@ function enqueue(task) {
 // ================= Bot message stream =================
 // Semua pesan masuk dari bot ditaruh di antrian ring; consumer bisa
 // menunggu pesan berikutnya atau memakainya untuk collectReply.
-const inbox = []; // {msg, text, at}
+const inbox = []; // {key, msg, text, at}
 const waiters = []; // resolve callbacks
-function pushInbox(msg) {
+function messageKey(msg) {
+  return String(msg?.id ?? `${msg?.date ?? "no-date"}:${msg?.message ?? ""}`);
+}
+function pushInbox(msg, { collect = true } = {}) {
   const text = msg.message || "";
-  const item = { msg, text, at: Date.now() };
+  const key = messageKey(msg);
+  const item = { key, msg, text, at: Date.now() };
+  const existing = inbox.findIndex((it) => it.key === key);
+  if (existing >= 0) {
+    inbox[existing] = item;
+    return item;
+  }
   inbox.push(item);
   // Batasi ukuran
   if (inbox.length > 200) inbox.shift();
   while (waiters.length) waiters.shift()(item);
   // Untuk collectReply mode
-  pushCollector(text);
+  if (collect) pushCollector(item);
+  return item;
 }
 function waitNextBotMessage(timeoutMs) {
   return new Promise((resolve) => {
@@ -93,10 +103,26 @@ async function drainAndGetLatest(waitMs) {
 
 // ================= Collector (untuk reply query) =================
 const pending = new Map();
-function pushCollector(text) {
+function isMenuOrWelcomeText(text) {
+  const t = normalize(text).toLowerCase();
+  if (!t) return true;
+  return t.includes("selamat datang di enigma osint bot") ||
+    t.includes("pilih layanan yang anda butuhkan") ||
+    t === "🏠 menu utama" ||
+    t === "menu utama" ||
+    t === "❓ bantuan" ||
+    t === "bantuan";
+}
+function pushCollector(item) {
+  const text = item?.text || "";
   if (!text || !text.trim()) return;
   for (const [id, p] of pending) {
     if (!p.collecting) continue;
+    if (item.at < p.startedAt) continue;
+    if (isMenuOrWelcomeText(text)) {
+      console.log(`[bridge] ignore menu/welcome while collecting ${id}`);
+      continue;
+    }
     p.messages.push(text);
     clearTimeout(p.quietTimer);
     p.quietTimer = setTimeout(() => finishPending(id, "quiet"), quietMs);
@@ -108,12 +134,16 @@ function finishPending(requestId, reason) {
   clearTimeout(p.quietTimer);
   clearTimeout(p.hardTimer);
   pending.delete(requestId);
-  const text = p.messages.map((m) => m.trim()).filter(Boolean).join("\n\n") || "(tidak ada balasan bot dalam batas waktu)";
+  const text = p.messages.map((m) => m.trim()).filter(Boolean).join("\n\n");
+  if (!text) {
+    p.resolve({ ok: false, error: "Bot tidak mengirim hasil setelah tombol fitur dipilih. Cek label/callback tombol di features.json.", reason });
+    return;
+  }
   p.resolve({ ok: true, reply: text, reason });
 }
 async function collectReply(requestId) {
   return new Promise((resolve) => {
-    const entry = { messages: [], resolve, quietTimer: null, hardTimer: null, collecting: true };
+    const entry = { messages: [], resolve, quietTimer: null, hardTimer: null, collecting: true, startedAt: Date.now() };
     entry.hardTimer = setTimeout(() => finishPending(requestId, "hard-timeout"), replyTimeout);
     pending.set(requestId, entry);
   });
