@@ -6,7 +6,7 @@ const { StringSession } = require("telegram/sessions");
 const { NewMessage } = require("telegram/events");
 const featuresMap = require("./features.json");
 
-const BRIDGE_VERSION = "2026-07-06-click-prompt-v2";
+const BRIDGE_VERSION = "2026-07-06-mtproto-callback-v3";
 
 const {
   TG_API_ID,
@@ -45,6 +45,9 @@ function sign(payload) { return crypto.createHmac("sha256", BRIDGE_SECRET).updat
 function safeEqual(a, b) {
   const A = Buffer.from(String(a)); const B = Buffer.from(String(b));
   return A.length === B.length && crypto.timingSafeEqual(A, B);
+}
+function safeEqualSecret(value) {
+  return !!value && safeEqual(value, BRIDGE_SECRET);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -172,6 +175,13 @@ function hasCallbackData(btn) {
   return btn && Object.prototype.hasOwnProperty.call(btn, "data") && btn.data != null;
 }
 
+function callbackDataToBuffer(data) {
+  if (Buffer.isBuffer(data)) return data;
+  if (data instanceof Uint8Array) return Buffer.from(data);
+  if (Array.isArray(data)) return Buffer.from(data);
+  return Buffer.from(String(data));
+}
+
 function isTextReplyButton(btn) {
   const kind = buttonKind(btn);
   // Reply-keyboard buttons are "clicked" by sending their text as a normal
@@ -184,12 +194,18 @@ function isTextReplyButton(btn) {
 }
 
 async function invokeCallbackButton(msg, btn) {
-  const peer = await client.getInputEntity(botEntity);
-  return client.invoke(new Api.messages.GetBotCallbackAnswer({
-    peer,
-    msgId: msg.id,
-    data: btn.data,
-  }));
+  const peer = await msg.getInputChat().catch(() => client.getInputEntity(botEntity));
+  const data = callbackDataToBuffer(btn.data);
+  try {
+    return await client.invoke(new Api.messages.GetBotCallbackAnswer({
+      peer,
+      msgId: msg.id,
+      data,
+    }));
+  } catch (e) {
+    if (e?.errorMessage === "BOT_RESPONSE_TIMEOUT") return null;
+    throw e;
+  }
 }
 
 async function clickButtonByText(msg, label) {
@@ -241,6 +257,33 @@ function describeButtons(msg) {
     .join(" || ");
 }
 
+function serializeButton(btn, row, col) {
+  const data = hasCallbackData(btn) ? callbackDataToBuffer(btn.data) : null;
+  return {
+    row,
+    col,
+    text: btn.text || "",
+    type: buttonKind(btn),
+    hasCallback: !!data,
+    callbackDataBase64: data ? data.toString("base64") : null,
+    callbackDataText: data ? data.toString("utf8") : null,
+  };
+}
+
+function serializeMessageButtons(msg) {
+  const rows = msg?.replyMarkup?.rows ?? [];
+  return rows.map((row, rowIndex) => row.buttons.map((btn, colIndex) => serializeButton(btn, rowIndex, colIndex)));
+}
+
+function summarizeMessage(msg) {
+  return {
+    id: msg?.id ?? null,
+    text: (msg?.message || "").slice(0, 300),
+    hasButtons: hasAnyButtons(msg),
+    buttons: serializeMessageButtons(msg),
+  };
+}
+
 async function fetchRecentBotMessages(limit = 10) {
   try {
     const messages = await client.getMessages(botEntity, { limit });
@@ -251,6 +294,15 @@ async function fetchRecentBotMessages(limit = 10) {
   } catch (e) {
     console.warn("[bridge] getMessages gagal:", e.message);
   }
+}
+
+async function inspectRecentMenu(limit = 12) {
+  await fetchRecentBotMessages(limit);
+  return inbox
+    .filter((it) => hasAnyButtons(it.msg))
+    .slice(-limit)
+    .reverse()
+    .map((it) => ({ key: it.key, at: new Date(it.at).toISOString(), ...summarizeMessage(it.msg) }));
 }
 
 function findCachedMessageWithButton(label, afterAt = 0) {
@@ -390,6 +442,15 @@ async function main() {
   app.use(express.json({ limit: "1mb" }));
 
   app.get("/health", (_req, res) => res.json({ ok: true, version: BRIDGE_VERSION, bot: TG_BOT_TARGET, botId: botIdStr }));
+
+  app.get("/debug/menu", async (req, res) => {
+    if (!safeEqualSecret(req.header("X-Bridge-Secret") || "")) {
+      return res.status(401).json({ ok: false, error: "unauthorized" });
+    }
+    const limit = Math.min(30, Math.max(1, Number(req.query.limit || 12)));
+    const messages = await inspectRecentMenu(limit);
+    res.json({ ok: true, version: BRIDGE_VERSION, bot: TG_BOT_TARGET, count: messages.length, messages });
+  });
 
   app.post("/run", async (req, res) => {
     const sig = req.header("X-Bridge-Signature") || "";
