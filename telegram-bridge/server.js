@@ -6,6 +6,8 @@ const { StringSession } = require("telegram/sessions");
 const { NewMessage } = require("telegram/events");
 const featuresMap = require("./features.json");
 
+const BRIDGE_VERSION = "2026-07-06-click-prompt-v2";
+
 const {
   TG_API_ID,
   TG_API_HASH,
@@ -56,17 +58,27 @@ function enqueue(task) {
 // ================= Bot message stream =================
 // Semua pesan masuk dari bot ditaruh di antrian ring; consumer bisa
 // menunggu pesan berikutnya atau memakainya untuk collectReply.
-const inbox = []; // {msg, text, at}
+const inbox = []; // {key, msg, text, at}
 const waiters = []; // resolve callbacks
-function pushInbox(msg) {
+function messageKey(msg) {
+  return String(msg?.id ?? `${msg?.date ?? "no-date"}:${msg?.message ?? ""}`);
+}
+function pushInbox(msg, { collect = true } = {}) {
   const text = msg.message || "";
-  const item = { msg, text, at: Date.now() };
+  const key = messageKey(msg);
+  const item = { key, msg, text, at: Date.now() };
+  const existing = inbox.findIndex((it) => it.key === key);
+  if (existing >= 0) {
+    inbox[existing] = item;
+    return item;
+  }
   inbox.push(item);
   // Batasi ukuran
   if (inbox.length > 200) inbox.shift();
   while (waiters.length) waiters.shift()(item);
   // Untuk collectReply mode
-  pushCollector(text);
+  if (collect) pushCollector(item);
+  return item;
 }
 function waitNextBotMessage(timeoutMs) {
   return new Promise((resolve) => {
@@ -93,10 +105,26 @@ async function drainAndGetLatest(waitMs) {
 
 // ================= Collector (untuk reply query) =================
 const pending = new Map();
-function pushCollector(text) {
+function isMenuOrWelcomeText(text) {
+  const t = normalize(text).toLowerCase();
+  if (!t) return true;
+  return t.includes("selamat datang di enigma osint bot") ||
+    t.includes("pilih layanan yang anda butuhkan") ||
+    t === "🏠 menu utama" ||
+    t === "menu utama" ||
+    t === "❓ bantuan" ||
+    t === "bantuan";
+}
+function pushCollector(item) {
+  const text = item?.text || "";
   if (!text || !text.trim()) return;
   for (const [id, p] of pending) {
     if (!p.collecting) continue;
+    if (item.at < p.startedAt) continue;
+    if (isMenuOrWelcomeText(text)) {
+      console.log(`[bridge] ignore menu/welcome while collecting ${id}`);
+      continue;
+    }
     p.messages.push(text);
     clearTimeout(p.quietTimer);
     p.quietTimer = setTimeout(() => finishPending(id, "quiet"), quietMs);
@@ -108,12 +136,16 @@ function finishPending(requestId, reason) {
   clearTimeout(p.quietTimer);
   clearTimeout(p.hardTimer);
   pending.delete(requestId);
-  const text = p.messages.map((m) => m.trim()).filter(Boolean).join("\n\n") || "(tidak ada balasan bot dalam batas waktu)";
+  const text = p.messages.map((m) => m.trim()).filter(Boolean).join("\n\n");
+  if (!text) {
+    p.resolve({ ok: false, error: "Bot tidak mengirim hasil setelah tombol fitur dipilih. Cek label/callback tombol di features.json.", reason });
+    return;
+  }
   p.resolve({ ok: true, reply: text, reason });
 }
 async function collectReply(requestId) {
   return new Promise((resolve) => {
-    const entry = { messages: [], resolve, quietTimer: null, hardTimer: null, collecting: true };
+    const entry = { messages: [], resolve, quietTimer: null, hardTimer: null, collecting: true, startedAt: Date.now() };
     entry.hardTimer = setTimeout(() => finishPending(requestId, "hard-timeout"), replyTimeout);
     pending.set(requestId, entry);
   });
@@ -202,23 +234,74 @@ async function clickButtonByText(msg, label) {
   return false;
 }
 
-async function findMenuMessageWithButton(label, waitMs) {
-  const deadline = Date.now() + waitMs;
-  // Cek pesan yang sudah ada dulu (paling baru dulu)
+function describeButtons(msg) {
+  if (!msg?.replyMarkup?.rows) return "no-buttons";
+  return msg.replyMarkup.rows
+    .map((row) => row.buttons.map((b) => `${b.text || "?"}<${buttonKind(b)}${hasCallbackData(b) ? ":callback" : ""}>`).join(" | "))
+    .join(" || ");
+}
+
+async function fetchRecentBotMessages(limit = 10) {
+  try {
+    const messages = await client.getMessages(botEntity, { limit });
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg && !msg.out) pushInbox(msg, { collect: false });
+    }
+  } catch (e) {
+    console.warn("[bridge] getMessages gagal:", e.message);
+  }
+}
+
+function findCachedMessageWithButton(label, afterAt = 0) {
   for (let i = inbox.length - 1; i >= 0; i--) {
     const it = inbox[i];
+    if (it.at < afterAt) continue;
     if (it.msg?.replyMarkup?.rows) {
       const has = it.msg.replyMarkup.rows.some((r) => r.buttons.some((b) => normalize(b.text) === normalize(label)));
       if (has) return it.msg;
     }
   }
+  return null;
+}
+
+async function findMenuMessageWithButton(label, waitMs, { afterAt = 0, includeHistory = true } = {}) {
+  const deadline = Date.now() + waitMs;
+  if (includeHistory) await fetchRecentBotMessages(12);
+  const cached = findCachedMessageWithButton(label, afterAt);
+  if (cached) {
+    console.log(`[bridge] found button "${label}" in message ${cached.id}: ${describeButtons(cached)}`);
+    return cached;
+  }
   while (Date.now() < deadline) {
     const next = await waitNextBotMessage(deadline - Date.now());
     if (!next) return null;
+    if (next.at < afterAt) continue;
     if (next.msg?.replyMarkup?.rows) {
       const has = next.msg.replyMarkup.rows.some((r) => r.buttons.some((b) => normalize(b.text) === normalize(label)));
-      if (has) return next.msg;
+      if (has) {
+        console.log(`[bridge] found button "${label}" in new message ${next.msg.id}: ${describeButtons(next.msg)}`);
+        return next.msg;
+      }
     }
+  }
+  return null;
+}
+
+function hasAnyButtons(msg) {
+  return !!msg?.replyMarkup?.rows?.some((r) => r.buttons?.length);
+}
+
+async function waitForFeaturePrompt(afterAt, waitMs) {
+  const deadline = Date.now() + waitMs;
+  while (Date.now() < deadline) {
+    const next = await waitNextBotMessage(deadline - Date.now());
+    if (!next || next.at < afterAt) continue;
+    const text = next.text || "";
+    if (!text.trim()) continue;
+    if (isMenuOrWelcomeText(text)) continue;
+    if (hasAnyButtons(next.msg)) continue;
+    return next;
   }
   return null;
 }
@@ -231,14 +314,17 @@ async function runFeature({ requestId, feature, query }) {
   inbox.length = 0;
 
   // 1. /start → dapatkan menu welcome dengan tombol "Menu Utama"
+  const startAt = Date.now();
   await sendToBot("/start");
-  let menuMsg = await findMenuMessageWithButton("🏠 Menu Utama", menuWait);
+  let menuMsg = await findMenuMessageWithButton("🏠 Menu Utama", menuWait, { afterAt: startAt - 500, includeHistory: false });
 
   // 2. Klik "Menu Utama" untuk buka daftar fitur
   if (menuMsg) {
+    const clickedAt = Date.now();
     const okClick = await clickButtonByText(menuMsg, "🏠 Menu Utama");
     if (!okClick) console.warn("[bridge] gagal klik Menu Utama");
     await sleep(buttonDelay);
+    await fetchRecentBotMessages(8);
   } else {
     console.warn("[bridge] tidak menemukan tombol Menu Utama setelah /start");
   }
@@ -248,11 +334,17 @@ async function runFeature({ requestId, feature, query }) {
   if (!featureMsg) {
     return { ok: false, error: `tombol "${buttonLabel}" tidak ditemukan di menu bot` };
   }
+  const featureClickedAt = Date.now();
   const clicked = await clickButtonByText(featureMsg, buttonLabel);
   if (!clicked) return { ok: false, error: `gagal klik tombol "${buttonLabel}"` };
 
-  // 4. Beri jeda supaya bot kirim prompt "masukkan …"
-  await sleep(buttonDelay);
+  // 4. Tunggu prompt/input dari fitur. Jika yang muncul hanya welcome/menu,
+  // jangan lanjut kirim query karena berarti tombol fitur belum aktif.
+  const prompt = await waitForFeaturePrompt(featureClickedAt, Math.max(menuWait, buttonDelay * 3));
+  if (!prompt) {
+    return { ok: false, error: `tombol "${buttonLabel}" belum membuka prompt input. Yang diterima masih menu/welcome; cek apakah label di features.json persis dengan tombol bot.` };
+  }
+  console.log(`[bridge] feature prompt: ${(prompt.text || "").slice(0, 100).replace(/\n/g, " ")}`);
 
   // 5. Kirim query & kumpulkan balasan
   const collector = collectReply(requestId);
@@ -297,7 +389,7 @@ async function main() {
   const app = express();
   app.use(express.json({ limit: "1mb" }));
 
-  app.get("/health", (_req, res) => res.json({ ok: true, bot: TG_BOT_TARGET, botId: botIdStr }));
+  app.get("/health", (_req, res) => res.json({ ok: true, version: BRIDGE_VERSION, bot: TG_BOT_TARGET, botId: botIdStr }));
 
   app.post("/run", async (req, res) => {
     const sig = req.header("X-Bridge-Signature") || "";
