@@ -26,6 +26,7 @@ const COLOR: Record<MapPoint["kind"], string> = {
   convertBTS: "#f59e0b",
   closestBTS: "#a855f7",
 };
+const ESTIMATE_COLOR = "#ef4444";
 
 function coloredIcon(kind: MapPoint["kind"]): L.DivIcon {
   const c = COLOR[kind];
@@ -36,6 +37,56 @@ function coloredIcon(kind: MapPoint["kind"]): L.DivIcon {
     iconAnchor: [8, 8],
   });
 }
+
+function estimateIcon(): L.DivIcon {
+  const c = ESTIMATE_COLOR;
+  return L.divIcon({
+    className: "",
+    html: `<div style="position:relative;width:28px;height:28px;">
+      <span style="position:absolute;inset:0;border-radius:50%;background:${c};opacity:0.25;animation:pulse 1.6s ease-out infinite"></span>
+      <span style="position:absolute;top:6px;left:6px;width:16px;height:16px;border-radius:50%;background:${c};border:2px solid #04070d;box-shadow:0 0 14px ${c}"></span>
+      <span style="position:absolute;top:11px;left:11px;width:6px;height:6px;border-radius:50%;background:#fff;"></span>
+    </div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+}
+
+// Haversine (meter)
+function haversine(a: [number, number], b: [number, number]): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b[0] - a[0]);
+  const dLng = toRad(b[1] - a[1]);
+  const s1 = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a[0])) * Math.cos(toRad(b[0])) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s1));
+}
+
+function estimateTarget(points: MapPoint[]): { lat: number; long: number; radius: number; basis: string } | null {
+  if (points.length === 0) return null;
+  // Bobot: /cp paling tinggi (real-time), convertBTS menengah, closestBTS terendah.
+  const weightOf = (k: MapPoint["kind"]) => (k === "cp" ? 4 : k === "convertBTS" ? 2 : 1);
+  let sumW = 0, sumLat = 0, sumLng = 0;
+  const parts: Record<string, number> = {};
+  for (const p of points) {
+    const w = weightOf(p.kind);
+    sumW += w; sumLat += p.lat * w; sumLng += p.long * w;
+    parts[p.kind] = (parts[p.kind] ?? 0) + 1;
+  }
+  const lat = sumLat / sumW;
+  const long = sumLng / sumW;
+  // Radius = jarak terjauh titik berbobot dari centroid (min 150m, cap 5km)
+  let radius = 150;
+  for (const p of points) {
+    const d = haversine([lat, long], [p.lat, p.long]);
+    if (d > radius) radius = d;
+  }
+  radius = Math.min(radius, 5000);
+  const basis = Object.entries(parts).map(([k, n]) => `${n}×${k}`).join(" + ");
+  return { lat, long, radius, basis };
+}
+
 
 export function TargetMap({ points, height = 320 }: { points: MapPoint[]; height?: number }) {
   const ref = useRef<HTMLDivElement | null>(null);
