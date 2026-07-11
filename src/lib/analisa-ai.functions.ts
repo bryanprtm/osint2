@@ -405,6 +405,29 @@ export const listAnalysisRuns = createServerFn({ method: "POST" })
     return { ok: true as const, runs: (rows ?? []) as RunRow[] };
   });
 
+export const hasActiveAnalysis = createServerFn({ method: "POST" })
+  .inputValidator((input: { username?: string } | undefined) =>
+    z.object({ username: z.string().max(80).optional() }).parse(input ?? {}),
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    let q = supabaseAdmin
+      .from("analisa_ai_runs")
+      .select("id,target_phone,created_at")
+      .eq("status", "running")
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (data.username) q = q.eq("username", data.username);
+    const { data: rows } = await q;
+    const row = (rows ?? [])[0] as { id: string; target_phone: string; created_at: string } | undefined;
+    return {
+      active: !!row,
+      runId: row?.id ?? null,
+      phone: row?.target_phone ?? null,
+      created_at: row?.created_at ?? null,
+    };
+  });
+
 export const generateAiSummary = createServerFn({ method: "POST" })
   .inputValidator((input: { runId: string }) =>
     z.object({ runId: z.string().uuid() }).parse(input),
