@@ -37,13 +37,7 @@ function AnalisaAiPage() {
             Analisa <span className="text-cyber text-glow">AI Target</span>
           </h1>
         </div>
-        <Link
-          to="/analisa-ai/history"
-          className="ml-auto flex items-center gap-1.5 text-[11px] font-mono tracking-widest text-muted-foreground hover:text-cyber"
-        >
-          RIWAYAT
-        </Link>
-        <span className="text-[10px] font-mono text-muted-foreground">
+        <span className="ml-auto text-[10px] font-mono text-muted-foreground">
           OP: <span className="text-cyber">{user.username.toUpperCase()}</span>
         </span>
       </header>
