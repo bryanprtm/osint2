@@ -23,9 +23,11 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
   const [waitElapsed, setWaitElapsed] = useState(0);
   const [historyKey, setHistoryKey] = useState(0);
   const [pending, setPending] = useState<{ logId: string; featureId: string; query: string; command: string; created_at: string } | null>(null);
+  const [analysis, setAnalysis] = useState<{ active: boolean; phone: string | null; created_at: string | null }>({ active: false, phone: null, created_at: null });
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const analysisRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useServerFn(getWaSettings);
   const send = useServerFn(sendWaLookup);
