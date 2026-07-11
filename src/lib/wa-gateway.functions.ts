@@ -1,19 +1,19 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { commandKeyword, pickBestWaReplyMatch, scoreWaReplyMatch } from "@/lib/wa-reply-match";
+import {
+  sanitizePhone,
+  sanitizeQuery,
+  reconcileUnmatchedWaReplies,
+  loadRow,
+  toPublic,
+  baseUrl,
+  sendViaFonnte,
+  sendViaWablas,
+  type WaProvider,
+  type WaSettingsPublic,
+} from "@/lib/wa-gateway.server";
 
-export type WaProvider = "fonnte" | "wablas";
-
-export type WaSettingsPublic = {
-  provider: WaProvider;
-  bot_number: string;
-  subdomain: string;
-  enabled: boolean;
-  commands: Record<string, string>;
-  has_token: boolean;
-  has_secret: boolean;
-  updated_at: string;
-};
+export type { WaProvider, WaSettingsPublic } from "@/lib/wa-gateway.server";
 
 export type WaSendLogRow = {
   id: string;
@@ -28,6 +28,18 @@ export type WaSendLogRow = {
   created_at: string;
 };
 
+export type WaHistoryRow = {
+  id: string;
+  feature_id: string;
+  query: string;
+  command_sent: string;
+  status: string;
+  reply: string | null;
+  reply_at: string | null;
+  reply_sender: string | null;
+  created_at: string;
+};
+
 export const DEFAULT_WA_COMMANDS: Record<string, string> = {
   nik: "/nikdetail",
   kk: "/kkdetail",
@@ -39,243 +51,18 @@ export const DEFAULT_WA_COMMANDS: Record<string, string> = {
   guru: "/guru",
 };
 
-function sanitizePhone(v: unknown): string {
-  return String(v ?? "").replace(/\D+/g, "");
-}
-
-function boolish(v: unknown): boolean {
-  return v === true || v === "true" || v === 1 || v === "1";
-}
-
-function numberMatches(a: unknown, b: unknown): boolean {
-  const aa = sanitizePhone(a);
-  const bb = sanitizePhone(b);
-  return !!aa && !!bb && (aa === bb || aa.endsWith(bb) || bb.endsWith(aa));
-}
-
-function incomingMeta(row: any) {
-  const raw = row?.raw && typeof row.raw === "object" ? row.raw : {};
-  const d = raw?.data && typeof raw.data === "object" ? raw.data : raw;
-  return {
-    sender: sanitizePhone(row?.sender ?? d?.sender ?? d?.from ?? raw?.sender ?? raw?.from),
-    chatPhone: sanitizePhone(d?.phone ?? raw?.phone ?? d?.pushName ?? raw?.pushName),
-    message: String(row?.message ?? d?.message ?? d?.body ?? d?.text ?? raw?.message ?? "").trim(),
-    isGroup: boolish(d?.isGroup ?? raw?.isGroup),
-    fromMe: boolish(d?.isFromMe ?? d?.fromMe ?? d?.from_me ?? raw?.isFromMe ?? raw?.fromMe),
-  };
-}
-
-async function reconcileUnmatchedWaReplies(logId?: string, featureId?: string) {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data: setting } = await supabaseAdmin
-    .from("wa_gateway_settings")
-    .select("bot_number")
-    .eq("id", 1)
-    .maybeSingle();
-  const botNumber = sanitizePhone((setting as any)?.bot_number);
-  if (!botNumber) return { updated: 0 };
-
-  let pendingQuery = supabaseAdmin
-    .from("wa_send_log")
-    .select("id, feature_id, command_sent, query, created_at")
-    .eq("status", "sent")
-    .is("reply", null)
-    .order("created_at", { ascending: true });
-
-  if (logId) {
-    pendingQuery = pendingQuery.eq("id", logId).limit(1);
-  } else {
-    pendingQuery = pendingQuery
-      .gte("created_at", new Date(Date.now() - 45 * 60 * 1000).toISOString())
-      .limit(100);
-    if (featureId) pendingQuery = pendingQuery.eq("feature_id", featureId);
-  }
-
-  const { data: pendingRows, error: pendingError } = await pendingQuery;
-  if (pendingError) throw new Error(pendingError.message);
-  const pending = (pendingRows ?? []) as Array<{
-    id: string;
-    feature_id: string;
-    command_sent: string;
-    query: string;
-    created_at: string;
-  }>;
-  if (pending.length === 0) return repairMisroutedWaReplies(logId, featureId);
-
-  const earliestMs = Math.min(...pending.map((p) => new Date(p.created_at).getTime()));
-  const { data: incomingRows, error: incomingError } = await supabaseAdmin
-    .from("wa_incoming")
-    .select("id, sender, message, created_at, raw")
-    .is("matched_log_id", null)
-    .gte("created_at", new Date(earliestMs - 5_000).toISOString())
-    .order("created_at", { ascending: true })
-    .limit(300);
-  if (incomingError) throw new Error(incomingError.message);
-
-  const incoming = ((incomingRows ?? []) as Array<any>)
-    .map((row) => ({ row, meta: incomingMeta(row), time: new Date(row.created_at).getTime() }))
-    .filter(({ meta }) => !meta.isGroup && meta.message && (numberMatches(meta.chatPhone, botNumber) || numberMatches(meta.sender, botNumber) || meta.fromMe));
-
-  let updated = 0;
-  const usedPendingIds = new Set<string>();
-  for (const hit of incoming) {
-    const availablePending = pending.filter((p) => !usedPendingIds.has(p.id));
-    const p = pickBestWaReplyMatch(availablePending, hit.meta.message, hit.time, true);
-    if (!p) continue;
-
-    const replyAt = new Date(hit.time).toISOString();
-    const replySender = hit.meta.chatPhone || hit.meta.sender;
-    const { error: updateError } = await supabaseAdmin
-      .from("wa_send_log")
-      .update({ reply: hit.meta.message, reply_at: replyAt, reply_sender: replySender })
-      .eq("id", p.id)
-      .is("reply", null);
-    if (updateError) throw new Error(updateError.message);
-    await supabaseAdmin.from("wa_incoming").update({ matched_log_id: p.id }).eq("id", hit.row.id);
-    usedPendingIds.add(p.id);
-    updated += 1;
-  }
-  const repaired = await repairMisroutedWaReplies(logId, featureId);
-  return { updated: updated + repaired.updated };
-}
-
-async function repairMisroutedWaReplies(targetLogId?: string, targetFeatureId?: string) {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const since = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
-
-  const { data: incomingRows, error: incomingError } = await supabaseAdmin
-    .from("wa_incoming")
-    .select("id, sender, message, created_at, raw, matched_log_id")
-    .not("matched_log_id", "is", null)
-    .gte("created_at", since)
-    .order("created_at", { ascending: true })
-    .limit(300);
-  if (incomingError) throw new Error(incomingError.message);
-  if (!incomingRows || incomingRows.length === 0) return { updated: 0 };
-
-  const { data: logRows, error: logError } = await supabaseAdmin
-    .from("wa_send_log")
-    .select("id, feature_id, command_sent, query, created_at, reply")
-    .eq("status", "sent")
-    .gte("created_at", new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString())
-    .order("created_at", { ascending: true })
-    .limit(500);
-  if (logError) throw new Error(logError.message);
-
-  const logs = (logRows ?? []) as Array<{
-    id: string;
-    feature_id: string;
-    command_sent: string;
-    query: string;
-    created_at: string;
-    reply: string | null;
-  }>;
-  if (logs.length === 0) return { updated: 0 };
-
-  let updated = 0;
-  for (const row of incomingRows as Array<any>) {
-    const meta = incomingMeta(row);
-    if (!meta.message || meta.isGroup) continue;
-
-    const replyTime = new Date(row.created_at).getTime();
-    const current = logs.find((log) => log.id === row.matched_log_id);
-    if (!current) continue;
-
-    const candidates = logs.filter((log) => {
-      if (log.id === current.id) return true;
-      if (log.reply) return false;
-      const sentAt = new Date(log.created_at).getTime();
-      return Number.isFinite(sentAt) && sentAt <= replyTime + 5_000 && replyTime - sentAt <= 30 * 60 * 1000;
-    });
-    const best = pickBestWaReplyMatch(candidates, meta.message, replyTime, false);
-    if (!best || best.id === current.id) continue;
-    if (targetLogId && best.id !== targetLogId) continue;
-    if (targetFeatureId && best.feature_id !== targetFeatureId) continue;
-
-    const bestScore = scoreWaReplyMatch(best, meta.message, replyTime, false);
-    const currentScore = scoreWaReplyMatch(current, meta.message, replyTime, false);
-    if (bestScore < 10_000 || bestScore <= currentScore + 1_000) continue;
-
-    const replyAt = new Date(replyTime).toISOString();
-    const replySender = meta.chatPhone || meta.sender;
-    const { error: moveError } = await supabaseAdmin
-      .from("wa_send_log")
-      .update({ reply: meta.message, reply_at: replyAt, reply_sender: replySender })
-      .eq("id", best.id)
-      .is("reply", null);
-    if (moveError) throw new Error(moveError.message);
-
-    if (current.reply === meta.message) {
-      const { error: clearError } = await supabaseAdmin
-        .from("wa_send_log")
-        .update({ reply: null, reply_at: null, reply_sender: null })
-        .eq("id", current.id);
-      if (clearError) throw new Error(clearError.message);
-      current.reply = null;
-    }
-
-    const { error: incomingUpdateError } = await supabaseAdmin
-      .from("wa_incoming")
-      .update({ matched_log_id: best.id })
-      .eq("id", row.id);
-    if (incomingUpdateError) throw new Error(incomingUpdateError.message);
-
-    best.reply = meta.message;
-    updated += 1;
-  }
-
-  return { updated };
-}
-
-function sanitizeQuery(featureId: string, q: string): string {
-  const digitOnly = new Set(["nik", "kk", "bpjs", "imei", "regnik", "nik2photo", "regphone"]);
-  if (digitOnly.has(featureId)) return q.replace(/\D+/g, "");
-  return q.trim();
-}
-
-async function loadRow() {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data, error } = await supabaseAdmin
-    .from("wa_gateway_settings")
-    .select("*")
-    .eq("id", 1)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data) {
-    await supabaseAdmin.from("wa_gateway_settings").insert({ id: 1 });
-    const { data: d2 } = await supabaseAdmin.from("wa_gateway_settings").select("*").eq("id", 1).single();
-    return d2 as any;
-  }
-  return data as any;
-}
-
-function toPublic(row: any): WaSettingsPublic {
-  return {
-    provider: (row.provider as WaProvider) ?? "fonnte",
-    bot_number: row.bot_number ?? "",
-    subdomain: row.subdomain ?? "",
-    enabled: !!row.enabled,
-    commands: (row.commands as Record<string, string>) ?? {},
-    has_token: !!(row.api_token && String(row.api_token).length > 0),
-    has_secret: !!(row.secret_key && String(row.secret_key).length > 0),
-    updated_at: row.updated_at,
-  };
-}
-
 // ============= READ =============
 export const getWaSettings = createServerFn({ method: "GET" }).handler(async () => {
-  const row = await loadRow();
-  return { settings: toPublic(row) };
+  const { loadRow: _load, toPublic: _pub } = await import("@/lib/wa-gateway.server");
+  const row = await _load();
+  return { settings: _pub(row) };
 });
 
-function baseUrl(): string {
-  return process.env.VITE_PUBLISHED_URL || process.env.PUBLISHED_URL || "https://osint2.lovable.app";
-}
-
 export const getWaWebhookUrl = createServerFn({ method: "GET" }).handler(async () => {
+  const { baseUrl: _base } = await import("@/lib/wa-gateway.server");
   const key = process.env.WA_WEBHOOK_KEY ?? "";
   if (!key) return { url: null };
-  return { url: `${baseUrl()}/api/public/wa/incoming?key=${key}` };
+  return { url: `${_base()}/api/public/wa/incoming?key=${key}` };
 });
 
 // ============= SAVE =============
@@ -286,8 +73,8 @@ export const saveWaSettings = createServerFn({ method: "POST" })
     subdomain?: string;
     enabled: boolean;
     commands: Record<string, string>;
-    api_token?: string; // optional — empty string keeps existing
-    secret_key?: string; // optional — empty string keeps existing
+    api_token?: string;
+    secret_key?: string;
   }) =>
     z.object({
       provider: z.enum(["fonnte", "wablas"]),
@@ -301,6 +88,7 @@ export const saveWaSettings = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const helpers = await import("@/lib/wa-gateway.server");
     const patch: {
       provider: string;
       bot_number: string;
@@ -312,7 +100,7 @@ export const saveWaSettings = createServerFn({ method: "POST" })
       secret_key?: string;
     } = {
       provider: data.provider,
-      bot_number: sanitizePhone(data.bot_number),
+      bot_number: helpers.sanitizePhone(data.bot_number),
       subdomain: (data.subdomain ?? "").trim().toLowerCase().replace(/[^a-z0-9-]/g, ""),
       enabled: data.enabled,
       commands: data.commands,
@@ -326,50 +114,11 @@ export const saveWaSettings = createServerFn({ method: "POST" })
     }
     const { error } = await supabaseAdmin.from("wa_gateway_settings").update(patch).eq("id", 1);
     if (error) return { ok: false as const, error: error.message };
-    const row = await loadRow();
-    return { ok: true as const, settings: toPublic(row) };
+    const row = await helpers.loadRow();
+    return { ok: true as const, settings: helpers.toPublic(row) };
   });
 
 // ============= SEND =============
-async function sendViaFonnte(token: string, target: string, message: string) {
-  const res = await fetch("https://api.fonnte.com/send", {
-    method: "POST",
-    headers: { Authorization: token, "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ target, message, countryCode: "62" }).toString(),
-  });
-  const text = await res.text();
-  return { ok: res.ok, status: res.status, text };
-}
-
-async function sendViaWablas(
-  token: string,
-  secret: string,
-  subdomain: string,
-  target: string,
-  message: string,
-) {
-  // Wablas: POST https://<subdomain>.wablas.com/api/send-message
-  // Auth header is "<token>.<secret>" when secret key is configured (mode "secret key + IP whitelist").
-  // Fallback to token-only when secret is empty (device tanpa proteksi secret key).
-  let sub = (subdomain || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
-  let realToken = token;
-  // Backward compat: dulu subdomain di-embed dalam token sebagai "sub|token".
-  if (!sub && token.includes("|")) {
-    const [s, t] = token.split("|");
-    if (s) sub = s.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
-    if (t) realToken = t.trim();
-  }
-  if (!sub) sub = "solo";
-  const auth = secret && secret.length > 0 ? `${realToken}.${secret}` : realToken;
-  const res = await fetch(`https://${sub}.wablas.com/api/send-message`, {
-    method: "POST",
-    headers: { Authorization: auth, "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ phone: target, message }).toString(),
-  });
-  const text = await res.text();
-  return { ok: res.ok, status: res.status, text };
-}
-
 export const sendWaLookup = createServerFn({ method: "POST" })
   .inputValidator((input: {
     featureId: string;
@@ -384,16 +133,17 @@ export const sendWaLookup = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const row = await loadRow();
+    const helpers = await import("@/lib/wa-gateway.server");
+    const row = await helpers.loadRow();
     if (!row.enabled) return { ok: false as const, message: "Integrasi WhatsApp belum diaktifkan admin." };
-    const target = sanitizePhone(row.bot_number);
+    const target = helpers.sanitizePhone(row.bot_number);
     if (!target) return { ok: false as const, message: "Nomor bot belum dikonfigurasi." };
     if (!row.api_token) return { ok: false as const, message: "Token API gateway belum diisi." };
 
     const cmd = ((row.commands as Record<string, string>) || {})[data.featureId];
     if (!cmd || !cmd.trim()) return { ok: false as const, message: "Perintah untuk modul ini belum diatur." };
 
-    const q = sanitizeQuery(data.featureId, data.query);
+    const q = helpers.sanitizeQuery(data.featureId, data.query);
     if (!q) return { ok: false as const, message: "Query kosong." };
 
     const message = `${cmd.trim()} ${q}`;
@@ -402,8 +152,8 @@ export const sendWaLookup = createServerFn({ method: "POST" })
     let result: { ok: boolean; status: number; text: string };
     try {
       result = provider === "wablas"
-        ? await sendViaWablas(row.api_token, row.secret_key ?? "", row.subdomain ?? "", target, message)
-        : await sendViaFonnte(row.api_token, target, message);
+        ? await helpers.sendViaWablas(row.api_token, row.secret_key ?? "", row.subdomain ?? "", target, message)
+        : await helpers.sendViaFonnte(row.api_token, target, message);
     } catch (e) {
       const errMsg = (e as Error).message;
       await supabaseAdmin.from("wa_send_log").insert({
@@ -436,7 +186,8 @@ export const getWaReply = createServerFn({ method: "POST" })
     z.object({ logId: z.string().uuid() }).parse(input),
   )
   .handler(async ({ data }) => {
-    await reconcileUnmatchedWaReplies(data.logId);
+    const { reconcileUnmatchedWaReplies: _rec } = await import("@/lib/wa-gateway.server");
+    await _rec(data.logId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error } = await supabaseAdmin
       .from("wa_send_log")
@@ -470,18 +221,6 @@ export const listWaSendLog = createServerFn({ method: "GET" })
   });
 
 // ============= MY HISTORY (per user + feature, dengan balasan) =============
-export type WaHistoryRow = {
-  id: string;
-  feature_id: string;
-  query: string;
-  command_sent: string;
-  status: string;
-  reply: string | null;
-  reply_at: string | null;
-  reply_sender: string | null;
-  created_at: string;
-};
-
 export const listMyWaHistory = createServerFn({ method: "POST" })
   .inputValidator((input: { username?: string; featureId?: string; limit?: number }) =>
     z.object({
@@ -491,7 +230,8 @@ export const listMyWaHistory = createServerFn({ method: "POST" })
     }).parse(input ?? {}),
   )
   .handler(async ({ data }) => {
-    await reconcileUnmatchedWaReplies(undefined, data.featureId);
+    const { reconcileUnmatchedWaReplies: _rec } = await import("@/lib/wa-gateway.server");
+    await _rec(undefined, data.featureId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     let q = supabaseAdmin
       .from("wa_send_log")
@@ -506,14 +246,13 @@ export const listMyWaHistory = createServerFn({ method: "POST" })
   });
 
 // ============= PENDING LOCK (global per user) =============
-// Kembalikan permintaan tertua yang masih menunggu balasan bot (status=sent, reply=null)
-// dalam 5 menit terakhir. Dipakai untuk mengunci tombol kirim agar balasan tidak tertukar.
 export const getWaPending = createServerFn({ method: "POST" })
   .inputValidator((input: { username?: string }) =>
     z.object({ username: z.string().max(80).optional() }).parse(input ?? {}),
   )
   .handler(async ({ data }) => {
-    await reconcileUnmatchedWaReplies();
+    const { reconcileUnmatchedWaReplies: _rec } = await import("@/lib/wa-gateway.server");
+    await _rec();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const since = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     let q = supabaseAdmin
