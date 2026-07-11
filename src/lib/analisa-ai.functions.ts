@@ -60,7 +60,7 @@ export type StepRow = {
   query: string;
   status: "pending" | "sent" | "done" | "timeout" | "error" | "skipped";
   reply: string | null;
-  parsed: unknown;
+  parsed: Record<string, any> | Array<any> | null;
   sent_at: string | null;
   reply_at: string | null;
   wa_log_id: string | null;
@@ -204,7 +204,7 @@ async function syncStepReplies(runId: string) {
         .update({
           reply,
           reply_at: (log as any).reply_at ?? new Date().toISOString(),
-          parsed,
+          parsed: parsed as any,
           status: "done",
         })
         .eq("id", s.id);
@@ -220,12 +220,12 @@ async function syncStepReplies(runId: string) {
   }
 }
 
-function parseByKey(key: StepKey, text: string): unknown {
+function parseByKey(key: StepKey, text: string): Record<string, any> | Array<any> {
   switch (key) {
-    case "cp":         return parseCpReply(text);
-    case "data_phone": return parseDataPhoneReply(text);
-    case "convertBTS": return parseConvertBtsReply(text);
-    case "closestBTS": return parseClosestBtsReply(text);
+    case "cp":         return parseCpReply(text) as Record<string, any>;
+    case "data_phone": return parseDataPhoneReply(text) as Record<string, any>;
+    case "convertBTS": return parseConvertBtsReply(text) as Record<string, any>;
+    case "closestBTS": return parseClosestBtsReply(text) as Record<string, any>;
     default:           return tabulateKeyValue(text);
   }
 }
