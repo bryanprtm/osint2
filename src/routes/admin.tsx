@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { listUsers, createUser, updateUser, deleteUser, type AppUserRow } from "@/lib/users.functions";
 import { getWaSettings, saveWaSettings, listWaSendLog, getWaWebhookUrl, DEFAULT_WA_COMMANDS, type WaSettingsPublic, type WaSendLogRow, type WaProvider } from "@/lib/wa-gateway.functions";
+import { getAiSettings, saveAiSettings, type AiSettingsPublic, type AiProvider } from "@/lib/ai-settings.functions";
 import { useServerFn } from "@tanstack/react-start";
 
 
@@ -91,6 +92,56 @@ function AdminPage() {
     void fetchWaLog({ data: { limit: 20 } }).then((r) => setWaLog(r?.rows ?? [])).catch(() => {});
     void fetchWaWebhookUrl().then((r) => setWaWebhookUrl(r?.url ?? null)).catch(() => {});
   }, [fetchWaSettings, fetchWaLog, fetchWaWebhookUrl]);
+
+  // --- AI Provider state ---
+  const [aiProvider, setAiProvider] = useState<AiProvider>("lovable");
+  const [aiOpenaiModel, setAiOpenaiModel] = useState("gpt-4o-mini");
+  const [aiOpenaiBase, setAiOpenaiBase] = useState("https://api.openai.com/v1");
+  const [aiLovableModel, setAiLovableModel] = useState("google/gemini-2.5-flash");
+  const [aiOpenaiKey, setAiOpenaiKey] = useState("");
+  const [aiHasOpenaiKey, setAiHasOpenaiKey] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiNote, setAiNote] = useState("");
+  const [aiErr, setAiErr] = useState("");
+  const fetchAiSettings = useServerFn(getAiSettings);
+  const persistAiSettings = useServerFn(saveAiSettings);
+
+  const applyAiSettings = (s: AiSettingsPublic) => {
+    setAiProvider(s.provider);
+    setAiOpenaiModel(s.openai_model);
+    setAiOpenaiBase(s.openai_base_url);
+    setAiLovableModel(s.lovable_model);
+    setAiHasOpenaiKey(s.has_openai_key);
+  };
+
+  useEffect(() => {
+    void fetchAiSettings().then((r) => r?.settings && applyAiSettings(r.settings)).catch(() => {});
+  }, [fetchAiSettings]);
+
+  const saveAi = async (opts?: { clearKey?: boolean }) => {
+    setAiBusy(true); setAiNote(""); setAiErr("");
+    try {
+      const r = await persistAiSettings({
+        data: {
+          provider: aiProvider,
+          openai_model: aiOpenaiModel,
+          openai_base_url: aiOpenaiBase,
+          lovable_model: aiLovableModel,
+          openai_api_key: opts?.clearKey ? undefined : (aiOpenaiKey.trim() || undefined),
+          clear_openai_key: opts?.clearKey ? true : undefined,
+        },
+      });
+      if (!r?.ok) { setAiErr(r?.error ?? "Gagal menyimpan"); return; }
+      applyAiSettings(r.settings);
+      setAiOpenaiKey("");
+      setAiNote(opts?.clearKey ? "OpenAI key dihapus." : "Konfigurasi AI tersimpan.");
+      setTimeout(() => setAiNote(""), 2800);
+    } catch (e) {
+      setAiErr((e as Error).message);
+    } finally {
+      setAiBusy(false);
+    }
+  };
 
 
   // --- Users state ---
@@ -579,6 +630,106 @@ function AdminPage() {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+            </div>
+
+            {/* === AI PROVIDER === */}
+            <h2 className="text-xs font-mono uppercase tracking-[0.3em] text-cyber pt-2">▸ Integrasi AI (Analisa AI Target)</h2>
+            <div className="panel-frame corner-brackets rounded-sm p-4 space-y-3">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                Provider AI untuk fitur <span className="text-cyber">Analisa AI</span> (rangkuman naratif dari balasan bot)
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className={`flex items-center gap-2 border rounded-sm px-2.5 py-2 cursor-pointer ${aiProvider === "lovable" ? "border-cyber bg-cyber/5" : "border-border"}`}>
+                  <input type="radio" name="ai-provider" checked={aiProvider === "lovable"} onChange={() => setAiProvider("lovable")} />
+                  <div className="text-xs font-mono">
+                    <div className="text-foreground">Lovable AI Gateway</div>
+                    <div className="text-[10px] text-muted-foreground">Pakai LOVABLE_API_KEY (hanya di Lovable Cloud)</div>
+                  </div>
+                </label>
+                <label className={`flex items-center gap-2 border rounded-sm px-2.5 py-2 cursor-pointer ${aiProvider === "openai" ? "border-cyber bg-cyber/5" : "border-border"}`}>
+                  <input type="radio" name="ai-provider" checked={aiProvider === "openai"} onChange={() => setAiProvider("openai")} />
+                  <div className="text-xs font-mono">
+                    <div className="text-foreground">OpenAI (kompatibel)</div>
+                    <div className="text-[10px] text-muted-foreground">Untuk deploy di VPS / self-host</div>
+                  </div>
+                </label>
+              </div>
+
+              {aiProvider === "lovable" ? (
+                <div className="space-y-1">
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Model Lovable Gateway</div>
+                  <input
+                    value={aiLovableModel}
+                    onChange={(e) => setAiLovableModel(e.target.value)}
+                    placeholder="google/gemini-2.5-flash"
+                    className="w-full bg-input/40 border border-border focus:border-cyber outline-none px-2 py-1.5 rounded-sm text-xs font-mono"
+                  />
+                  <div className="text-[10px] font-mono text-muted-foreground">Contoh: <span className="text-cyber">google/gemini-2.5-flash</span>, <span className="text-cyber">openai/gpt-5-mini</span></div>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Model OpenAI</div>
+                      <input
+                        value={aiOpenaiModel}
+                        onChange={(e) => setAiOpenaiModel(e.target.value)}
+                        placeholder="gpt-4o-mini"
+                        className="w-full bg-input/40 border border-border focus:border-cyber outline-none px-2 py-1.5 rounded-sm text-xs font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Base URL</div>
+                      <input
+                        value={aiOpenaiBase}
+                        onChange={(e) => setAiOpenaiBase(e.target.value)}
+                        placeholder="https://api.openai.com/v1"
+                        className="w-full bg-input/40 border border-border focus:border-cyber outline-none px-2 py-1.5 rounded-sm text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                      OpenAI API Key {aiHasOpenaiKey && <span className="text-success">● key tersimpan</span>}
+                    </div>
+                    <input
+                      type="password"
+                      value={aiOpenaiKey}
+                      onChange={(e) => setAiOpenaiKey(e.target.value)}
+                      placeholder={aiHasOpenaiKey ? "•••••••• (kosongkan untuk tetap pakai key lama)" : "sk-..."}
+                      className="w-full bg-input/40 border border-border focus:border-cyber outline-none px-2 py-1.5 rounded-sm text-xs font-mono"
+                    />
+                    <div className="text-[10px] font-mono text-muted-foreground leading-relaxed">
+                      Key disimpan terenkripsi di database (bukan LOVABLE_API_KEY). Saat aplikasi dipindah ke VPS, cukup pilih provider <span className="text-cyber">OpenAI</span> dan isi key ini — Analisa AI langsung memakai OpenAI tanpa perlu Lovable Cloud.
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <div className="flex gap-2">
+                <button onClick={() => void saveAi()} disabled={aiBusy} className="flex-1 flex items-center justify-center gap-2 py-2 rounded-sm bg-cyber text-primary-foreground font-semibold tracking-wider text-xs glow-cyber hover:bg-cyber-glow uppercase disabled:opacity-50">
+                  <Save className="w-3.5 h-3.5" /> {aiBusy ? "Menyimpan..." : "Simpan Konfigurasi AI"}
+                </button>
+                {aiHasOpenaiKey && (
+                  <button
+                    onClick={() => { if (confirm("Hapus OpenAI API key tersimpan?")) void saveAi({ clearKey: true }); }}
+                    disabled={aiBusy}
+                    className="flex items-center gap-1 py-2 px-3 rounded-sm border border-destructive/50 text-destructive hover:bg-destructive/10 font-mono uppercase text-[10px] tracking-wider disabled:opacity-40"
+                  >
+                    <Trash2 className="w-3 h-3" /> Hapus Key
+                  </button>
+                )}
+              </div>
+              {aiNote && (
+                <div className="flex items-center gap-2 text-[11px] text-success border border-success/30 bg-success/10 px-2 py-1.5 rounded-sm">
+                  <Check className="w-3.5 h-3.5" /> {aiNote}
+                </div>
+              )}
+              {aiErr && (
+                <div className="flex items-center gap-2 text-[11px] text-destructive border border-destructive/30 bg-destructive/10 px-2 py-1.5 rounded-sm">
+                  ⚠ {aiErr}
                 </div>
               )}
             </div>

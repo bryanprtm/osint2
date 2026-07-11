@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_settings: {
+        Row: {
+          id: number
+          lovable_model: string
+          openai_api_key: string | null
+          openai_base_url: string
+          openai_model: string
+          provider: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          lovable_model?: string
+          openai_api_key?: string | null
+          openai_base_url?: string
+          openai_model?: string
+          provider?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          lovable_model?: string
+          openai_api_key?: string | null
+          openai_base_url?: string
+          openai_model?: string
+          provider?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       analisa_ai_runs: {
         Row: {
           ai_summary: string | null

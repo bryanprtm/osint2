@@ -433,8 +433,27 @@ export const generateAiSummary = createServerFn({ method: "POST" })
     z.object({ runId: z.string().uuid() }).parse(input),
   )
   .handler(async ({ data }) => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) return { ok: false as const, message: "LOVABLE_API_KEY belum dikonfigurasi." };
+    const { loadAiSettingsInternal } = await import("@/lib/ai-settings.functions");
+    const ai = await loadAiSettingsInternal();
+
+    let endpoint: string;
+    let headers: Record<string, string>;
+    let model: string;
+
+    if (ai.provider === "openai") {
+      if (!ai.openai_api_key) {
+        return { ok: false as const, message: "OpenAI API key belum dikonfigurasi di panel Admin." };
+      }
+      endpoint = `${ai.openai_base_url.replace(/\/+$/, "")}/chat/completions`;
+      headers = { "Content-Type": "application/json", Authorization: `Bearer ${ai.openai_api_key}` };
+      model = ai.openai_model;
+    } else {
+      const key = process.env.LOVABLE_API_KEY;
+      if (!key) return { ok: false as const, message: "LOVABLE_API_KEY belum dikonfigurasi." };
+      endpoint = "https://ai.gateway.lovable.dev/v1/chat/completions";
+      headers = { "Content-Type": "application/json", "Lovable-API-Key": key };
+      model = ai.lovable_model;
+    }
 
     const run = await loadRun(data.runId);
     if (!run) return { ok: false as const, message: "Run tidak ditemukan." };
@@ -461,14 +480,11 @@ ${context}`;
 
     let text = "";
     try {
-      const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const res = await fetch(endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Lovable-API-Key": key,
-        },
+        headers,
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model,
           messages: [
             { role: "system", content: "Kamu adalah analis intelijen OSINT profesional." },
             { role: "user", content: prompt },
@@ -477,7 +493,7 @@ ${context}`;
       });
       if (!res.ok) {
         const body = await res.text();
-        return { ok: false as const, message: `AI Gateway error (HTTP ${res.status}): ${body.slice(0, 300)}` };
+        return { ok: false as const, message: `AI provider error (HTTP ${res.status}): ${body.slice(0, 300)}` };
       }
       const json: any = await res.json();
       text = json?.choices?.[0]?.message?.content ?? "";
