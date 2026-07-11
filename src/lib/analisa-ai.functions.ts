@@ -310,83 +310,74 @@ export const getAnalysisRun = createServerFn({ method: "POST" })
     return { ok: true as const, run };
   });
 
-export const advanceAnalysisStep = createServerFn({ method: "POST" })
-  .inputValidator((input: { runId: string }) =>
-    z.object({ runId: z.string().uuid() }).parse(input),
-  )
-  .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await syncStepReplies(data.runId);
-    const run = await loadRun(data.runId);
-    if (!run) return { ok: false as const, message: "Run tidak ditemukan." };
-    if (run.status !== "running") return { ok: true as const, run, advanced: false };
+/** Internal advance logic — dipakai server-fn dan cron tick. */
+export async function _advanceRunOnce(runId: string): Promise<{
+  ok: true; run: RunRow; advanced: boolean; done?: boolean; skipped?: boolean; waitMs?: number;
+} | { ok: false; message: string }> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  await syncStepReplies(runId);
+  const run = await loadRun(runId);
+  if (!run) return { ok: false, message: "Run tidak ditemukan." };
+  if (run.status !== "running") return { ok: true, run, advanced: false };
 
-    const lastStep = run.steps[run.steps.length - 1];
-    // Belum boleh lanjut? — step terakhir masih 'sent' dan belum lewat 5 menit
-    if (lastStep && lastStep.status === "sent" && lastStep.sent_at) {
-      const age = Date.now() - new Date(lastStep.sent_at).getTime();
-      if (age < REPLY_TIMEOUT_MS) {
-        return { ok: true as const, run, advanced: false, waitMs: REPLY_TIMEOUT_MS - age };
-      }
-    }
-    // Interval antar-command 5 menit dihitung dari sent_at step terakhir.
-    if (lastStep?.sent_at) {
-      const gap = Date.now() - new Date(lastStep.sent_at).getTime();
-      if (gap < STEP_INTERVAL_MS) {
-        return { ok: true as const, run, advanced: false, waitMs: STEP_INTERVAL_MS - gap };
-      }
-    }
+  const lastStep = run.steps[run.steps.length - 1];
+  if (lastStep && lastStep.status === "sent" && lastStep.sent_at) {
+    const age = Date.now() - new Date(lastStep.sent_at).getTime();
+    if (age < REPLY_TIMEOUT_MS) return { ok: true, run, advanced: false, waitMs: REPLY_TIMEOUT_MS - age };
+  }
+  if (lastStep?.sent_at) {
+    const gap = Date.now() - new Date(lastStep.sent_at).getTime();
+    if (gap < STEP_INTERVAL_MS) return { ok: true, run, advanced: false, waitMs: STEP_INTERVAL_MS - gap };
+  }
 
-    const nextIndex = run.steps.length;
-    if (nextIndex >= STEP_DEFS.length) {
-      await supabaseAdmin
-        .from("analisa_ai_runs")
-        .update({ status: "done", updated_at: new Date().toISOString() })
-        .eq("id", run.id);
-      const refreshed = await loadRun(run.id);
-      return { ok: true as const, run: refreshed!, advanced: false, done: true };
-    }
+  const nextIndex = run.steps.length;
+  if (nextIndex >= STEP_DEFS.length) {
+    await supabaseAdmin
+      .from("analisa_ai_runs")
+      .update({ status: "done", updated_at: new Date().toISOString() })
+      .eq("id", run.id);
+    const refreshed = await loadRun(run.id);
+    return { ok: true, run: refreshed!, advanced: false, done: true };
+  }
 
-    const def = STEP_DEFS[nextIndex];
-    const q = resolveQueryForKey(def.key, run.target_phone, run.steps);
+  const def = STEP_DEFS[nextIndex];
+  const q = resolveQueryForKey(def.key, run.target_phone, run.steps);
 
-    if (!q) {
-      // Data prasyarat tidak tersedia — tandai skipped agar orkestrasi lanjut.
-      await supabaseAdmin.from("analisa_ai_steps").insert({
-        run_id: run.id,
-        step_index: nextIndex,
-        key: def.key,
-        command: def.command,
-        query: "",
-        status: "skipped",
-      });
-      await supabaseAdmin
-        .from("analisa_ai_runs")
-        .update({ current_step: nextIndex, updated_at: new Date().toISOString() })
-        .eq("id", run.id);
-      const refreshed = await loadRun(run.id);
-      return { ok: true as const, run: refreshed!, advanced: true, skipped: true };
-    }
-
-    const send = await sendCommandToWa(def.command, q);
+  if (!q) {
     await supabaseAdmin.from("analisa_ai_steps").insert({
-      run_id: run.id,
-      step_index: nextIndex,
-      key: def.key,
-      command: def.command,
-      query: q,
-      wa_log_id: send.logId ?? null,
-      status: send.ok ? "sent" : "error",
-      sent_at: send.ok ? new Date().toISOString() : null,
-      reply: send.ok ? null : send.message,
+      run_id: run.id, step_index: nextIndex, key: def.key, command: def.command, query: "", status: "skipped",
     });
     await supabaseAdmin
       .from("analisa_ai_runs")
       .update({ current_step: nextIndex, updated_at: new Date().toISOString() })
       .eq("id", run.id);
     const refreshed = await loadRun(run.id);
-    return { ok: true as const, run: refreshed!, advanced: true };
+    return { ok: true, run: refreshed!, advanced: true, skipped: true };
+  }
+
+  const send = await sendCommandToWa(def.command, q);
+  await supabaseAdmin.from("analisa_ai_steps").insert({
+    run_id: run.id, step_index: nextIndex, key: def.key, command: def.command, query: q,
+    wa_log_id: send.logId ?? null,
+    status: send.ok ? "sent" : "error",
+    sent_at: send.ok ? new Date().toISOString() : null,
+    reply: send.ok ? null : send.message,
   });
+  await supabaseAdmin
+    .from("analisa_ai_runs")
+    .update({ current_step: nextIndex, updated_at: new Date().toISOString() })
+    .eq("id", run.id);
+  const refreshed = await loadRun(run.id);
+  return { ok: true, run: refreshed!, advanced: true };
+}
+
+export const advanceAnalysisStep = createServerFn({ method: "POST" })
+  .inputValidator((input: { runId: string }) =>
+    z.object({ runId: z.string().uuid() }).parse(input),
+  )
+  .handler(async ({ data }) => _advanceRunOnce(data.runId));
+
+
 
 export const abortAnalysis = createServerFn({ method: "POST" })
   .inputValidator((input: { runId: string }) =>
