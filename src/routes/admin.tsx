@@ -243,7 +243,40 @@ function AdminPage() {
     setTgToken(settings.telegramBotToken);
     setTgChat(settings.telegramChatId);
     setTgEnabled(settings.telegramEnabled);
+    setBrandTitle(settings.brandTitle);
+    setBrandSubtitle(settings.brandSubtitle);
+    setBrandLogo(settings.brandLogoUrl);
   }, [settings]);
+
+  const onLogoFile = async (file: File) => {
+    setBrandErr("");
+    if (!file.type.startsWith("image/")) { setBrandErr("File harus berupa gambar."); return; }
+    if (file.size > 300_000) { setBrandErr("Ukuran maksimal 300 KB. Kompres gambar terlebih dahulu."); return; }
+    const b64 = await new Promise<string>((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result));
+      r.onerror = () => rej(r.error);
+      r.readAsDataURL(file);
+    });
+    setBrandLogo(b64);
+  };
+
+  const saveBrand = async () => {
+    setBrandBusy(true); setBrandNote(""); setBrandErr("");
+    try {
+      await updateSettings({
+        brandTitle: brandTitle.trim() || "Den 404 Anti Eror OSINT",
+        brandSubtitle: brandSubtitle.trim() || "PROFILER //ID",
+        brandLogoUrl: brandLogo.trim(),
+      });
+      setBrandNote("Branding tersimpan.");
+      setTimeout(() => setBrandNote(""), 2500);
+    } catch (e) {
+      setBrandErr((e as Error).message);
+    } finally {
+      setBrandBusy(false);
+    }
+  };
 
   if (!ready || !user || user.role !== "admin") return null;
 
