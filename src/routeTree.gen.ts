@@ -14,8 +14,10 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AnalisaAiRouteImport } from './routes/analisa-ai'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AnalisaAiHistoryRouteImport } from './routes/analisa-ai.history'
 import { Route as ApiPublicWaIncomingRouteImport } from './routes/api/public/wa/incoming'
 import { Route as ApiPublicTgIncomingRouteImport } from './routes/api/public/tg/incoming'
+import { Route as ApiPublicHooksAnalisaTickRouteImport } from './routes/api/public/hooks/analisa-tick'
 
 const OsirisRoute = OsirisRouteImport.update({
   id: '/osiris',
@@ -42,6 +44,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AnalisaAiHistoryRoute = AnalisaAiHistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
+  getParentRoute: () => AnalisaAiRoute,
+} as any)
 const ApiPublicWaIncomingRoute = ApiPublicWaIncomingRouteImport.update({
   id: '/api/public/wa/incoming',
   path: '/api/public/wa/incoming',
@@ -52,22 +59,32 @@ const ApiPublicTgIncomingRoute = ApiPublicTgIncomingRouteImport.update({
   path: '/api/public/tg/incoming',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHooksAnalisaTickRoute =
+  ApiPublicHooksAnalisaTickRouteImport.update({
+    id: '/api/public/hooks/analisa-tick',
+    path: '/api/public/hooks/analisa-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
-  '/analisa-ai': typeof AnalisaAiRoute
+  '/analisa-ai': typeof AnalisaAiRouteWithChildren
   '/login': typeof LoginRoute
   '/osiris': typeof OsirisRoute
+  '/analisa-ai/history': typeof AnalisaAiHistoryRoute
+  '/api/public/hooks/analisa-tick': typeof ApiPublicHooksAnalisaTickRoute
   '/api/public/tg/incoming': typeof ApiPublicTgIncomingRoute
   '/api/public/wa/incoming': typeof ApiPublicWaIncomingRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
-  '/analisa-ai': typeof AnalisaAiRoute
+  '/analisa-ai': typeof AnalisaAiRouteWithChildren
   '/login': typeof LoginRoute
   '/osiris': typeof OsirisRoute
+  '/analisa-ai/history': typeof AnalisaAiHistoryRoute
+  '/api/public/hooks/analisa-tick': typeof ApiPublicHooksAnalisaTickRoute
   '/api/public/tg/incoming': typeof ApiPublicTgIncomingRoute
   '/api/public/wa/incoming': typeof ApiPublicWaIncomingRoute
 }
@@ -75,9 +92,11 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
-  '/analisa-ai': typeof AnalisaAiRoute
+  '/analisa-ai': typeof AnalisaAiRouteWithChildren
   '/login': typeof LoginRoute
   '/osiris': typeof OsirisRoute
+  '/analisa-ai/history': typeof AnalisaAiHistoryRoute
+  '/api/public/hooks/analisa-tick': typeof ApiPublicHooksAnalisaTickRoute
   '/api/public/tg/incoming': typeof ApiPublicTgIncomingRoute
   '/api/public/wa/incoming': typeof ApiPublicWaIncomingRoute
 }
@@ -89,6 +108,8 @@ export interface FileRouteTypes {
     | '/analisa-ai'
     | '/login'
     | '/osiris'
+    | '/analisa-ai/history'
+    | '/api/public/hooks/analisa-tick'
     | '/api/public/tg/incoming'
     | '/api/public/wa/incoming'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +119,8 @@ export interface FileRouteTypes {
     | '/analisa-ai'
     | '/login'
     | '/osiris'
+    | '/analisa-ai/history'
+    | '/api/public/hooks/analisa-tick'
     | '/api/public/tg/incoming'
     | '/api/public/wa/incoming'
   id:
@@ -107,6 +130,8 @@ export interface FileRouteTypes {
     | '/analisa-ai'
     | '/login'
     | '/osiris'
+    | '/analisa-ai/history'
+    | '/api/public/hooks/analisa-tick'
     | '/api/public/tg/incoming'
     | '/api/public/wa/incoming'
   fileRoutesById: FileRoutesById
@@ -114,9 +139,10 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
-  AnalisaAiRoute: typeof AnalisaAiRoute
+  AnalisaAiRoute: typeof AnalisaAiRouteWithChildren
   LoginRoute: typeof LoginRoute
   OsirisRoute: typeof OsirisRoute
+  ApiPublicHooksAnalisaTickRoute: typeof ApiPublicHooksAnalisaTickRoute
   ApiPublicTgIncomingRoute: typeof ApiPublicTgIncomingRoute
   ApiPublicWaIncomingRoute: typeof ApiPublicWaIncomingRoute
 }
@@ -158,6 +184,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/analisa-ai/history': {
+      id: '/analisa-ai/history'
+      path: '/history'
+      fullPath: '/analisa-ai/history'
+      preLoaderRoute: typeof AnalisaAiHistoryRouteImport
+      parentRoute: typeof AnalisaAiRoute
+    }
     '/api/public/wa/incoming': {
       id: '/api/public/wa/incoming'
       path: '/api/public/wa/incoming'
@@ -172,15 +205,35 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicTgIncomingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/analisa-tick': {
+      id: '/api/public/hooks/analisa-tick'
+      path: '/api/public/hooks/analisa-tick'
+      fullPath: '/api/public/hooks/analisa-tick'
+      preLoaderRoute: typeof ApiPublicHooksAnalisaTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
+
+interface AnalisaAiRouteChildren {
+  AnalisaAiHistoryRoute: typeof AnalisaAiHistoryRoute
+}
+
+const AnalisaAiRouteChildren: AnalisaAiRouteChildren = {
+  AnalisaAiHistoryRoute: AnalisaAiHistoryRoute,
+}
+
+const AnalisaAiRouteWithChildren = AnalisaAiRoute._addFileChildren(
+  AnalisaAiRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
-  AnalisaAiRoute: AnalisaAiRoute,
+  AnalisaAiRoute: AnalisaAiRouteWithChildren,
   LoginRoute: LoginRoute,
   OsirisRoute: OsirisRoute,
+  ApiPublicHooksAnalisaTickRoute: ApiPublicHooksAnalisaTickRoute,
   ApiPublicTgIncomingRoute: ApiPublicTgIncomingRoute,
   ApiPublicWaIncomingRoute: ApiPublicWaIncomingRoute,
 }
