@@ -32,8 +32,8 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
   const fetchReply = useServerFn(getWaReply);
   const fetchPending = useServerFn(getWaPending);
 
-  const isEnigma = ENIGMA_FEATURE_IDS.has(featureId);
-  const enigmaLabel = ENIGMA_FEATURES[featureId] ?? "";
+  const isEnigma = isEnigmaFeature(featureId);
+  const enigmaLabel = resolveEnigmaLabel(featureId) ?? "";
 
   useEffect(() => {
     if (isEnigma) { setSettings(null); return; }
