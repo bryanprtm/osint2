@@ -173,7 +173,8 @@ export function AnalisaAiConsole() {
         <p className="text-[10px] font-mono text-muted-foreground leading-relaxed">
           Rangkaian 9 perintah bot WhatsApp dijalankan otomatis dengan jeda 5 menit antar perintah
           (/cp → /data → /convertBTS → /closestBTS → /data NIK → /nikdetail → /kk → /nkes → /prof).
-          Total estimasi ± 45 menit. Halaman ini harus tetap terbuka.
+          Total estimasi ± 45 menit. <span className="text-success">Proses berjalan di server</span> — halaman
+          boleh ditutup / di-back, analisa tetap lanjut. Lihat <a href="/analisa-ai/history" className="text-cyber underline">Riwayat</a> untuk semua balasan chat & hasil AI.
         </p>
         {msg && <div className="text-[11px] font-mono text-destructive bg-destructive/10 border border-destructive/30 px-2 py-1 rounded-sm">{msg}</div>}
       </div>
