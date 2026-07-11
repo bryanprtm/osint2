@@ -27,6 +27,8 @@ export type BtsPointParsed = {
   long?: number;
   address?: string;
   distance?: string;
+  /** Jarak ke target dalam meter (hasil parsing angka dari `distance`). */
+  distance_m?: number;
 };
 
 export type ClosestBtsParsed = {
