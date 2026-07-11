@@ -37,6 +37,9 @@ export type AppSettings = {
   telegramBotToken: string;
   telegramChatId: string;
   telegramEnabled: boolean;
+  brandTitle: string;
+  brandSubtitle: string;
+  brandLogoUrl: string;
 };
 
 const ICON_MAP: Record<string, LucideIcon> = {
