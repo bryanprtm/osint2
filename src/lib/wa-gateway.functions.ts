@@ -1,17 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import {
-  sanitizePhone,
-  sanitizeQuery,
-  reconcileUnmatchedWaReplies,
-  loadRow,
-  toPublic,
-  baseUrl,
-  sendViaFonnte,
-  sendViaWablas,
-  type WaProvider,
-  type WaSettingsPublic,
-} from "@/lib/wa-gateway.server";
+import type { WaProvider, WaSettingsPublic } from "@/lib/wa-gateway.server";
 
 export type { WaProvider, WaSettingsPublic } from "@/lib/wa-gateway.server";
 
