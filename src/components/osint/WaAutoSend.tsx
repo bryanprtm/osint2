@@ -63,6 +63,25 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
     };
   }, [fetchPending, user?.username, historyKey]);
 
+  // Cek apakah Analisa AI sedang berjalan untuk user ini — jika ya, kunci semua pengiriman WA
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const r = await fetchActiveAnalysis({ data: { username: user?.username } });
+        if (cancelled) return;
+        setAnalysis({ active: !!r?.active, phone: r?.phone ?? null, created_at: r?.created_at ?? null });
+      } catch { /* ignore */ }
+    };
+    void check();
+    analysisRef.current = setInterval(check, 4000);
+    return () => {
+      cancelled = true;
+      if (analysisRef.current) { clearInterval(analysisRef.current); analysisRef.current = null; }
+    };
+  }, [fetchActiveAnalysis, user?.username]);
+
+
 
   // Reset saat query berubah (user cari data lain)
   useEffect(() => {
