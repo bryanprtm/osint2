@@ -34,6 +34,7 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
   const sendTg = useServerFn(sendTgLookup);
   const fetchReply = useServerFn(getWaReply);
   const fetchPending = useServerFn(getWaPending);
+  const fetchActiveAnalysis = useServerFn(hasActiveAnalysis);
 
   const isEnigma = isEnigmaFeature(featureId);
   const enigmaLabel = resolveEnigmaLabel(featureId) ?? "";
