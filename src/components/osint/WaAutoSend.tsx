@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { MessageCircle, Loader2, Check, X, MessagesSquare, Lock, Send } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getWaSettings, sendWaLookup, getWaReply, getWaPending, type WaSettingsPublic } from "@/lib/wa-gateway.functions";
+import { hasActiveAnalysis } from "@/lib/analisa-ai.functions";
 import { sendTgLookup, isEnigmaFeature, resolveEnigmaLabel } from "@/lib/tg-bridge.functions";
 import { useAuth } from "@/lib/auth";
 import { WaHistory } from "@/components/osint/WaHistory";
@@ -22,15 +23,18 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
   const [waitElapsed, setWaitElapsed] = useState(0);
   const [historyKey, setHistoryKey] = useState(0);
   const [pending, setPending] = useState<{ logId: string; featureId: string; query: string; command: string; created_at: string } | null>(null);
+  const [analysis, setAnalysis] = useState<{ active: boolean; phone: string | null; created_at: string | null }>({ active: false, phone: null, created_at: null });
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const analysisRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useServerFn(getWaSettings);
   const send = useServerFn(sendWaLookup);
   const sendTg = useServerFn(sendTgLookup);
   const fetchReply = useServerFn(getWaReply);
   const fetchPending = useServerFn(getWaPending);
+  const fetchActiveAnalysis = useServerFn(hasActiveAnalysis);
 
   const isEnigma = isEnigmaFeature(featureId);
   const enigmaLabel = resolveEnigmaLabel(featureId) ?? "";
@@ -58,6 +62,25 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
       if (pendingRef.current) { clearInterval(pendingRef.current); pendingRef.current = null; }
     };
   }, [fetchPending, user?.username, historyKey]);
+
+  // Cek apakah Analisa AI sedang berjalan untuk user ini — jika ya, kunci semua pengiriman WA
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const r = await fetchActiveAnalysis({ data: { username: user?.username } });
+        if (cancelled) return;
+        setAnalysis({ active: !!r?.active, phone: r?.phone ?? null, created_at: r?.created_at ?? null });
+      } catch { /* ignore */ }
+    };
+    void check();
+    analysisRef.current = setInterval(check, 4000);
+    return () => {
+      cancelled = true;
+      if (analysisRef.current) { clearInterval(analysisRef.current); analysisRef.current = null; }
+    };
+  }, [fetchActiveAnalysis, user?.username]);
+
 
 
   // Reset saat query berubah (user cari data lain)
@@ -144,11 +167,21 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
   };
 
   // Lock jika ada pending milik user (di modul manapun), kecuali pending itu milik pengiriman kita sendiri
-  const locked = !!pending && pending.logId !== logId;
+  const pendingLocked = !!pending && pending.logId !== logId;
+  const analysisLocked = analysis.active;
+  const locked = pendingLocked || analysisLocked;
   const lockAgeSec = pending ? Math.max(0, Math.floor((Date.now() - new Date(pending.created_at).getTime()) / 1000)) : 0;
+  const analysisAgeSec = analysis.created_at ? Math.max(0, Math.floor((Date.now() - new Date(analysis.created_at).getTime()) / 1000)) : 0;
 
   const btnLabel = isEnigma ? "Kirim ke Bot Enigma (Telegram)" : "Kirim ke Bot WhatsApp";
   const BtnIcon = isEnigma ? Send : MessageCircle;
+
+  const lockedLabel = analysisLocked
+    ? `Terkunci — Analisa AI sedang berjalan (${analysisAgeSec}s)`
+    : `Terkunci — tunggu balasan bot (${lockAgeSec}s)`;
+  const lockedTitle = analysisLocked
+    ? `Analisa AI sedang berjalan${analysis.phone ? ` untuk ${analysis.phone}` : ""}. Hentikan dulu di halaman Analisa AI untuk mengirim manual.`
+    : `Menunggu balasan bot untuk "${pending?.command ?? ""}"`;
 
   return (
     <div className="space-y-1.5">
@@ -157,7 +190,7 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
         onClick={handle}
         disabled={sending || waitingReply || locked || !query.trim()}
         className="w-full flex items-center justify-center gap-2 py-2 rounded-sm border border-success/50 text-success hover:bg-success/10 transition-colors font-mono uppercase tracking-wider text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-        title={locked ? `Menunggu balasan bot untuk "${pending!.command}"` : `Kirim "${cmd} ${query}" ke ${botLabel}`}
+        title={locked ? lockedTitle : `Kirim "${cmd} ${query}" ke ${botLabel}`}
       >
         {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : locked ? <Lock className="w-3.5 h-3.5" /> : <BtnIcon className="w-3.5 h-3.5" />}
         {sending
@@ -165,16 +198,28 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
           : waitingReply
             ? `Menunggu balasan bot... (${waitElapsed}s)`
             : locked
-              ? `Terkunci — tunggu balasan bot (${lockAgeSec}s)`
+              ? lockedLabel
               : btnLabel}
       </button>
 
-      {locked && (
+      {analysisLocked && (
+        <div className="text-[10px] font-mono text-warning bg-warning/10 border border-warning/30 px-2 py-1 rounded-sm">
+          <div className="flex items-center gap-1.5">
+            <Lock className="w-3 h-3 shrink-0" />
+            <span className="break-words">
+              Analisa AI sedang berjalan{analysis.phone ? <> untuk <b>{analysis.phone}</b></> : null}. Semua pengiriman manual ke bot dinonaktifkan sampai analisa selesai atau dihentikan.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {pendingLocked && !analysisLocked && (
         <div className="text-[10px] font-mono text-warning bg-warning/10 border border-warning/30 px-2 py-1 rounded-sm">
           <div className="flex items-center gap-1.5">
             <Lock className="w-3 h-3 shrink-0" />
             <span className="break-words">
               Ada permintaan sebelumnya yang masih menunggu balasan bot: <b>{pending!.command}</b>. Tombol kirim dinonaktifkan sampai balasan diterima atau timeout 5 menit tercapai.
+
             </span>
           </div>
         </div>
