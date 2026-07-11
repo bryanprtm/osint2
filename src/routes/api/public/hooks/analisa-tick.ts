@@ -2,22 +2,21 @@ import { createFileRoute } from "@tanstack/react-router";
 
 /**
  * Cron tick untuk orkestrasi Analisa AI Target.
- * Dipanggil pg_cron setiap 1 menit. Untuk setiap run yang statusnya 'running',
- * lakukan sinkronisasi balasan bot lalu (jika interval 5 menit sudah tercapai)
- * lanjutkan ke command berikutnya. Menjadikan proses bebas dari state UI —
- * halaman boleh ditutup / user boleh back tanpa menghentikan analisa.
+ * Dipanggil pg_cron setiap 1 menit. Advance semua run yang berstatus 'running'.
+ * Membuat proses lepas dari state UI — halaman boleh ditutup / user boleh back.
  */
 export const Route = createFileRoute("/api/public/hooks/analisa-tick")({
   server: {
     handlers: {
+      GET: async () => new Response("ok"),
       POST: async () => {
         try {
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-          const { advanceAnalysisStep } = await import("@/lib/analisa-ai.functions");
+          const { _advanceRunOnce } = await import("@/lib/analisa-ai.functions");
 
           const { data: runs, error } = await supabaseAdmin
             .from("analisa_ai_runs")
-            .select("id, created_at")
+            .select("id")
             .eq("status", "running")
             .order("created_at", { ascending: true })
             .limit(50);
@@ -27,23 +26,16 @@ export const Route = createFileRoute("/api/public/hooks/analisa-tick")({
             });
           }
 
-          const results: Array<{ id: string; ok: boolean; advanced?: boolean; done?: boolean; message?: string }> = [];
+          const results = [] as Array<{ id: string; advanced?: boolean; done?: boolean; ok: boolean; message?: string }>;
           for (const r of runs ?? []) {
             try {
-              const res: any = await (advanceAnalysisStep as any).handler({ data: { runId: (r as any).id } });
-              // Some builds expose the inner handler directly; fallback: call as fn
-              results.push({ id: (r as any).id, ok: true, advanced: res?.advanced, done: res?.done });
+              const res = await _advanceRunOnce((r as any).id);
+              if (res.ok) results.push({ id: (r as any).id, ok: true, advanced: (res as any).advanced, done: (res as any).done });
+              else results.push({ id: (r as any).id, ok: false, message: (res as any).message });
             } catch (e) {
-              try {
-                // Fallback: invoke as server-fn (RPC self-call)
-                const res: any = await (advanceAnalysisStep as any)({ data: { runId: (r as any).id } });
-                results.push({ id: (r as any).id, ok: true, advanced: res?.advanced, done: res?.done });
-              } catch (e2) {
-                results.push({ id: (r as any).id, ok: false, message: (e2 as Error).message });
-              }
+              results.push({ id: (r as any).id, ok: false, message: (e as Error).message });
             }
           }
-
           return new Response(JSON.stringify({ ok: true, count: results.length, results }), {
             headers: { "Content-Type": "application/json" },
           });
@@ -53,7 +45,6 @@ export const Route = createFileRoute("/api/public/hooks/analisa-tick")({
           });
         }
       },
-      GET: async () => new Response("ok"),
     },
   },
 });
