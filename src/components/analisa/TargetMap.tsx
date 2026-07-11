@@ -67,25 +67,46 @@ function haversine(a: [number, number], b: [number, number]): number {
 
 function estimateTarget(points: MapPoint[]): { lat: number; long: number; radius: number; basis: string } | null {
   if (points.length === 0) return null;
-  // Bobot: /cp paling tinggi (real-time), convertBTS menengah, closestBTS terendah.
-  const weightOf = (k: MapPoint["kind"]) => (k === "cp" ? 4 : k === "convertBTS" ? 2 : 1);
+  // Bobot dasar berdasarkan jenis titik: /cp real-time = tertinggi.
+  const baseWeight = (k: MapPoint["kind"]) => (k === "cp" ? 4 : k === "convertBTS" ? 2 : 1.2);
+  // Bobot tambahan berdasarkan jarak BTS ke target (inverse distance):
+  // semakin dekat BTS ke target, semakin besar pengaruhnya terhadap estimasi.
+  // w_dist = 1 / (1 + d_km)^2 → BTS 0km ≈ 1, 1km ≈ 0.25, 5km ≈ 0.028
+  const distanceWeight = (p: MapPoint) => {
+    if (typeof p.distance_m !== "number" || !Number.isFinite(p.distance_m)) return 1;
+    const km = Math.max(0, p.distance_m) / 1000;
+    return 1 / Math.pow(1 + km, 2);
+  };
+
   let sumW = 0, sumLat = 0, sumLng = 0;
   const parts: Record<string, number> = {};
   for (const p of points) {
-    const w = weightOf(p.kind);
+    const w = baseWeight(p.kind) * distanceWeight(p);
     sumW += w; sumLat += p.lat * w; sumLng += p.long * w;
     parts[p.kind] = (parts[p.kind] ?? 0) + 1;
   }
   const lat = sumLat / sumW;
   const long = sumLng / sumW;
-  // Radius = jarak terjauh titik berbobot dari centroid (min 150m, cap 5km)
+
+  // Radius akurasi: kalau ada distance dari BTS, ambil rata-rata tertimbang
+  // jarak BTS terdekat (lebih realistis daripada centroid-max). Fallback ke centroid-max.
+  const withDist = points.filter((p) => typeof p.distance_m === "number" && Number.isFinite(p.distance_m!));
   let radius = 150;
-  for (const p of points) {
-    const d = haversine([lat, long], [p.lat, p.long]);
-    if (d > radius) radius = d;
+  if (withDist.length > 0) {
+    const sorted = [...withDist].sort((a, b) => (a.distance_m! - b.distance_m!));
+    const nearest = sorted.slice(0, Math.min(3, sorted.length));
+    const avg = nearest.reduce((s, p) => s + p.distance_m!, 0) / nearest.length;
+    radius = Math.max(150, avg);
+  } else {
+    for (const p of points) {
+      const d = haversine([lat, long], [p.lat, p.long]);
+      if (d > radius) radius = d;
+    }
   }
   radius = Math.min(radius, 5000);
-  const basis = Object.entries(parts).map(([k, n]) => `${n}×${k}`).join(" + ");
+
+  const distTag = withDist.length > 0 ? ` (${withDist.length} dgn jarak)` : "";
+  const basis = Object.entries(parts).map(([k, n]) => `${n}×${k}`).join(" + ") + distTag;
   return { lat, long, radius, basis };
 }
 
