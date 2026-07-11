@@ -135,7 +135,7 @@ export const sendTgLookup = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data }) => {
-    const label = ENIGMA_FEATURES[data.featureId];
+    const label = resolveEnigmaLabel(data.featureId);
     if (!label) return { ok: false as const, message: `Modul "${data.featureId}" bukan modul bot Enigma.` };
 
     const mtUrl = process.env.TG_BRIDGE_URL ?? "";
