@@ -10,7 +10,7 @@ import { useAuth, storedToFeature } from "@/lib/auth";
 import { lookupNik2KK, lookupImei, lookupBpjs, lookupNopol, lookupMahasiswa, lookupGuru } from "@/lib/lookup.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { BpjsConsole } from "@/components/osint/BpjsConsole";
-import { Info, LogOut, ShieldCheck, Send } from "lucide-react";
+import { Info, LogOut, ShieldCheck, Send, Brain } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -212,6 +212,9 @@ function Dashboard() {
                   <span title="Telegram aktif" className="text-success flex items-center gap-1"><Send className="w-3 h-3" /> TG</span>
                 )}
               </div>
+              <Link to="/analisa-ai" className="flex items-center gap-2 px-3 py-1.5 rounded-sm border border-cyber/40 text-cyber text-xs font-mono tracking-wider hover:bg-cyber/10 transition-colors">
+                <Brain className="w-3.5 h-3.5" /> ANALISA AI
+              </Link>
               {user.role === "admin" && (
                 <Link to="/admin" className="flex items-center gap-2 px-3 py-1.5 rounded-sm border border-cyber/40 text-cyber text-xs font-mono tracking-wider hover:bg-cyber/10 transition-colors">
                   <ShieldCheck className="w-3.5 h-3.5" /> ADMIN

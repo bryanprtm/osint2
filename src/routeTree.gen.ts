@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as OsirisRouteImport } from './routes/osiris'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as AnalisaAiRouteImport } from './routes/analisa-ai'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicWaIncomingRouteImport } from './routes/api/public/wa/incoming'
@@ -24,6 +25,11 @@ const OsirisRoute = OsirisRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalisaAiRoute = AnalisaAiRouteImport.update({
+  id: '/analisa-ai',
+  path: '/analisa-ai',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -50,6 +56,7 @@ const ApiPublicTgIncomingRoute = ApiPublicTgIncomingRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/analisa-ai': typeof AnalisaAiRoute
   '/login': typeof LoginRoute
   '/osiris': typeof OsirisRoute
   '/api/public/tg/incoming': typeof ApiPublicTgIncomingRoute
@@ -58,6 +65,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/analisa-ai': typeof AnalisaAiRoute
   '/login': typeof LoginRoute
   '/osiris': typeof OsirisRoute
   '/api/public/tg/incoming': typeof ApiPublicTgIncomingRoute
@@ -67,6 +75,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/analisa-ai': typeof AnalisaAiRoute
   '/login': typeof LoginRoute
   '/osiris': typeof OsirisRoute
   '/api/public/tg/incoming': typeof ApiPublicTgIncomingRoute
@@ -77,6 +86,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/analisa-ai'
     | '/login'
     | '/osiris'
     | '/api/public/tg/incoming'
@@ -85,6 +95,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/admin'
+    | '/analisa-ai'
     | '/login'
     | '/osiris'
     | '/api/public/tg/incoming'
@@ -93,6 +104,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/admin'
+    | '/analisa-ai'
     | '/login'
     | '/osiris'
     | '/api/public/tg/incoming'
@@ -102,6 +114,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
+  AnalisaAiRoute: typeof AnalisaAiRoute
   LoginRoute: typeof LoginRoute
   OsirisRoute: typeof OsirisRoute
   ApiPublicTgIncomingRoute: typeof ApiPublicTgIncomingRoute
@@ -122,6 +135,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analisa-ai': {
+      id: '/analisa-ai'
+      path: '/analisa-ai'
+      fullPath: '/analisa-ai'
+      preLoaderRoute: typeof AnalisaAiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -158,6 +178,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  AnalisaAiRoute: AnalisaAiRoute,
   LoginRoute: LoginRoute,
   OsirisRoute: OsirisRoute,
   ApiPublicTgIncomingRoute: ApiPublicTgIncomingRoute,
