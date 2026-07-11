@@ -3,7 +3,8 @@ import {
   Crosshair, Database, Map, FileSearch, Activity, Settings, LogOut, Shield,
   LayoutGrid, type LucideIcon,
 } from "lucide-react";
-import logo from "@/assets/logo.png";
+import defaultLogo from "@/assets/logo.png";
+import { useAuth } from "@/lib/auth";
 
 const NAV = [
   { icon: Crosshair, label: "Intelijen", active: true },
