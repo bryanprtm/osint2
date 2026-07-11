@@ -69,7 +69,7 @@ function featureToStored(f: Feature, i: number): StoredModule & { sort_order: nu
 
 const DEFAULT_MODULES_FULL = FEATURES.map((f, i) => featureToStored(f, i));
 const DEFAULT_MODULES: StoredModule[] = DEFAULT_MODULES_FULL.map(({ sort_order: _s, ...m }) => m);
-const DEFAULT_SETTINGS: AppSettings = { telegramBotToken: "", telegramChatId: "", telegramEnabled: false };
+const DEFAULT_SETTINGS: AppSettings = { telegramBotToken: "", telegramChatId: "", telegramEnabled: false, brandTitle: "Den 404 Anti Eror OSINT", brandSubtitle: "PROFILER //ID", brandLogoUrl: "" };
 
 type AuthCtx = {
   ready: boolean;
