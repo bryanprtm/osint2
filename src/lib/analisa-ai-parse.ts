@@ -27,6 +27,8 @@ export type BtsPointParsed = {
   long?: number;
   address?: string;
   distance?: string;
+  /** Jarak ke target dalam meter (hasil parsing angka dari `distance`). */
+  distance_m?: number;
 };
 
 export type ClosestBtsParsed = {
@@ -100,19 +102,37 @@ export function parseConvertBtsReply(text: string): BtsPointParsed {
   };
 }
 
+function parseDistanceMeters(s: string | undefined): number | undefined {
+  if (!s) return undefined;
+  const m = s.match(/(-?\d+(?:[.,]\d+)?)\s*(km|kilometer|m|meter)?/i);
+  if (!m) return undefined;
+  const n = Number(m[1].replace(",", "."));
+  if (!Number.isFinite(n)) return undefined;
+  const unit = (m[2] ?? "").toLowerCase();
+  if (unit.startsWith("k")) return n * 1000;
+  // Tanpa unit: kalau angka kecil (<50) anggap km (umum di balasan bot), selain itu meter.
+  if (!unit) return n < 50 ? n * 1000 : n;
+  return n;
+}
+
 export function parseClosestBtsReply(text: string): ClosestBtsParsed {
-  // Coba parsing tiap blok BTS (baris/paragraf terpisah).
-  const blocks = text.split(/\n{2,}|\r\n\r\n/).filter((b) => b.trim().length > 0);
+  // Coba parsing tiap blok BTS (baris/paragraf terpisah, atau dipisah bullet/numbering).
+  const blocks = text
+    .split(/\n{2,}|\r\n\r\n|(?:^|\n)\s*(?:[-•*]|\d+[.)])\s+/)
+    .map((b) => b.trim())
+    .filter((b) => b.length > 0);
   const points: BtsPointParsed[] = [];
   for (const b of blocks) {
     const { lat, long } = findLatLong(b);
-    if (lat == null && long == null) continue;
+    if (lat == null || long == null) continue;
+    const distance = pick(b, [/(?:jarak|distance|dist)\s*[:=]\s*([^\n]+)/i, /±\s*([\d.,]+\s*(?:km|m)?)/i]);
     points.push({
       lat,
       long,
       bts_id: pick(b, [/bts[_\s-]*id\s*[:=]\s*([A-Z0-9\-_]+)/i, /\b(tsel-[a-z0-9-]+|isat-[a-z0-9-]+|xl-[a-z0-9-]+)\b/i]),
       address: pick(b, [/alamat\s*[:=]\s*([^\n]+)/i, /address\s*[:=]\s*([^\n]+)/i]),
-      distance: pick(b, [/(?:jarak|distance)\s*[:=]\s*([^\n]+)/i]),
+      distance,
+      distance_m: parseDistanceMeters(distance),
     });
   }
   // Fallback: kumpulkan semua pasangan lat/long yang tampak di teks.
