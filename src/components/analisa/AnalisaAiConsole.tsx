@@ -6,17 +6,18 @@ import {
   advanceAnalysisStep,
   abortAnalysis,
   generateAiSummary,
+  listAnalysisRuns,
   STEP_DEFS,
   type RunRow,
   type StepRow,
-  type StepKey,
 } from "@/lib/analisa-ai.functions";
 import { useAuth } from "@/lib/auth";
 import { TargetMap, type MapPoint } from "./TargetMap";
 import { CommandTable } from "./CommandTable";
-import { Brain, Loader2, Play, Square, Sparkles, Target } from "lucide-react";
+import { Brain, History, Loader2, Play, Sparkles, Square, Target } from "lucide-react";
 
 const POLL_MS = 5_000;
+const HISTORY_REFRESH_MS = 15_000;
 
 export function AnalisaAiConsole() {
   const { user } = useAuth();
@@ -25,26 +26,35 @@ export function AnalisaAiConsole() {
   const [starting, setStarting] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [history, setHistory] = useState<RunRow[]>([]);
+  const [stoppingId, setStoppingId] = useState<string | null>(null);
 
   const startFn = useServerFn(startAnalysis);
   const getFn = useServerFn(getAnalysisRun);
   const advFn = useServerFn(advanceAnalysisStep);
   const abortFn = useServerFn(abortAnalysis);
   const sumFn = useServerFn(generateAiSummary);
+  const listFn = useServerFn(listAnalysisRuns);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const historyRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const advancingRef = useRef(false);
 
   const stopPolling = () => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   };
 
+  const refreshHistory = useCallback(async () => {
+    try {
+      const r = await listFn({ data: { limit: 50 } });
+      if (r.ok) setHistory(r.runs as RunRow[]);
+    } catch { /* ignore */ }
+  }, [listFn]);
+
   const tick = useCallback(async (runId: string) => {
     try {
-      // Refresh state
       const g = await getFn({ data: { runId } });
       if (g.ok) setRun(g.run);
-      // Coba lanjut ke step berikutnya (server memutuskan berdasarkan 5 menit / reply)
       if (!advancingRef.current) {
         advancingRef.current = true;
         try {
@@ -58,7 +68,26 @@ export function AnalisaAiConsole() {
     } catch { /* keep polling */ }
   }, [getFn, advFn]);
 
-  useEffect(() => () => stopPolling(), []);
+  useEffect(() => {
+    void refreshHistory();
+    historyRef.current = setInterval(() => void refreshHistory(), HISTORY_REFRESH_MS);
+    return () => {
+      stopPolling();
+      if (historyRef.current) clearInterval(historyRef.current);
+    };
+  }, [refreshHistory]);
+
+  const openRun = useCallback(async (runId: string) => {
+    stopPolling();
+    setMsg(null);
+    const g = await getFn({ data: { runId } });
+    if (g.ok) {
+      setRun(g.run);
+      if (g.run.status === "running") {
+        pollRef.current = setInterval(() => void tick(runId), POLL_MS);
+      }
+    }
+  }, [getFn, tick]);
 
   const handleStart = async () => {
     if (!phone.trim()) return;
@@ -72,6 +101,7 @@ export function AnalisaAiConsole() {
       if (g.ok) setRun(g.run);
       stopPolling();
       pollRef.current = setInterval(() => void tick(r.runId), POLL_MS);
+      void refreshHistory();
     } catch (e) {
       setMsg((e as Error).message);
     } finally {
@@ -79,12 +109,19 @@ export function AnalisaAiConsole() {
     }
   };
 
-  const handleAbort = async () => {
-    if (!run) return;
-    await abortFn({ data: { runId: run.id } });
-    stopPolling();
-    const g = await getFn({ data: { runId: run.id } });
-    if (g.ok) setRun(g.run);
+  const handleAbort = async (runId: string) => {
+    setStoppingId(runId);
+    try {
+      await abortFn({ data: { runId } });
+      if (run?.id === runId) {
+        stopPolling();
+        const g = await getFn({ data: { runId } });
+        if (g.ok) setRun(g.run);
+      }
+      await refreshHistory();
+    } finally {
+      setStoppingId(null);
+    }
   };
 
   const handleSummary = async () => {
@@ -163,8 +200,9 @@ export function AnalisaAiConsole() {
           </button>
           {run && isRunning && (
             <button
-              onClick={handleAbort}
-              className="flex items-center gap-2 py-2.5 px-4 rounded-sm border border-destructive/50 text-destructive hover:bg-destructive/10 font-mono uppercase text-xs tracking-wider"
+              onClick={() => handleAbort(run.id)}
+              disabled={stoppingId === run.id}
+              className="flex items-center gap-2 py-2.5 px-4 rounded-sm border border-destructive/50 text-destructive hover:bg-destructive/10 font-mono uppercase text-xs tracking-wider disabled:opacity-40"
             >
               <Square className="w-3.5 h-3.5" /> Hentikan
             </button>
@@ -174,7 +212,7 @@ export function AnalisaAiConsole() {
           Rangkaian 9 perintah bot WhatsApp dijalankan otomatis dengan jeda 5 menit antar perintah
           (/cp → /data → /convertBTS → /closestBTS → /data NIK → /nikdetail → /kk → /nkes → /prof).
           Total estimasi ± 45 menit. <span className="text-success">Proses berjalan di server</span> — halaman
-          boleh ditutup / di-back, analisa tetap lanjut. Lihat <a href="/analisa-ai/history" className="text-cyber underline">Riwayat</a> untuk semua balasan chat & hasil AI.
+          boleh ditutup / di-back, analisa tetap lanjut. Riwayat sesi tampil di bawah.
         </p>
         {msg && <div className="text-[11px] font-mono text-destructive bg-destructive/10 border border-destructive/30 px-2 py-1 rounded-sm">{msg}</div>}
       </div>
@@ -243,6 +281,64 @@ export function AnalisaAiConsole() {
           </div>
         </>
       )}
+
+      {/* Riwayat inline */}
+      <div className="panel-frame rounded-sm">
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-cyber/30 bg-panel-elevated/60">
+          <History className="w-4 h-4 text-cyber" />
+          <span className="text-xs font-mono uppercase tracking-[0.25em] text-cyber text-glow">Riwayat Analisa</span>
+          <span className="ml-auto text-[10px] font-mono text-muted-foreground">{history.length} sesi</span>
+        </div>
+        <div className="p-3 space-y-2 max-h-[420px] overflow-y-auto">
+          {history.length === 0 && (
+            <div className="text-xs font-mono text-muted-foreground px-1 py-2">Belum ada sesi analisa.</div>
+          )}
+          {history.map((r) => {
+            const active = run?.id === r.id;
+            const running = r.status === "running";
+            return (
+              <div
+                key={r.id}
+                className={`border rounded-sm px-2.5 py-2 flex items-center gap-2 transition-colors ${
+                  active ? "border-cyber bg-cyber/5" : "border-border hover:border-cyber/50"
+                }`}
+              >
+                <button
+                  onClick={() => void openRun(r.id)}
+                  className="flex-1 text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm text-cyber">{r.target_phone}</span>
+                    <span className={`text-[10px] font-mono ${
+                      r.status === "done" ? "text-success"
+                      : running ? "text-warning"
+                      : r.status === "aborted" ? "text-destructive"
+                      : "text-muted-foreground"
+                    }`}>
+                      {r.status.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="text-[10px] font-mono text-muted-foreground mt-0.5">
+                    {new Date(r.created_at).toLocaleString("id-ID")}
+                    {r.username && <> · op: {r.username}</>}
+                  </div>
+                </button>
+                {running && (
+                  <button
+                    onClick={() => void handleAbort(r.id)}
+                    disabled={stoppingId === r.id}
+                    title="Hentikan sesi"
+                    className="flex items-center gap-1 px-2 py-1 rounded-sm border border-destructive/50 text-destructive hover:bg-destructive/10 font-mono uppercase text-[10px] tracking-wider disabled:opacity-40"
+                  >
+                    {stoppingId === r.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Square className="w-3 h-3" />}
+                    Stop
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
