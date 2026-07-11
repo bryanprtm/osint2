@@ -14,6 +14,95 @@ export type Database = {
   }
   public: {
     Tables: {
+      analisa_ai_runs: {
+        Row: {
+          ai_summary: string | null
+          created_at: string
+          current_step: number
+          id: string
+          status: string
+          target_phone: string
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          ai_summary?: string | null
+          created_at?: string
+          current_step?: number
+          id?: string
+          status?: string
+          target_phone: string
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          ai_summary?: string | null
+          created_at?: string
+          current_step?: number
+          id?: string
+          status?: string
+          target_phone?: string
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
+      analisa_ai_steps: {
+        Row: {
+          command: string
+          created_at: string
+          id: string
+          key: string
+          parsed: Json | null
+          query: string
+          reply: string | null
+          reply_at: string | null
+          run_id: string
+          sent_at: string | null
+          status: string
+          step_index: number
+          wa_log_id: string | null
+        }
+        Insert: {
+          command: string
+          created_at?: string
+          id?: string
+          key: string
+          parsed?: Json | null
+          query: string
+          reply?: string | null
+          reply_at?: string | null
+          run_id: string
+          sent_at?: string | null
+          status?: string
+          step_index: number
+          wa_log_id?: string | null
+        }
+        Update: {
+          command?: string
+          created_at?: string
+          id?: string
+          key?: string
+          parsed?: Json | null
+          query?: string
+          reply?: string | null
+          reply_at?: string | null
+          run_id?: string
+          sent_at?: string | null
+          status?: string
+          step_index?: number
+          wa_log_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analisa_ai_steps_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "analisa_ai_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_modules: {
         Row: {
           category: string
