@@ -93,6 +93,56 @@ function AdminPage() {
     void fetchWaWebhookUrl().then((r) => setWaWebhookUrl(r?.url ?? null)).catch(() => {});
   }, [fetchWaSettings, fetchWaLog, fetchWaWebhookUrl]);
 
+  // --- AI Provider state ---
+  const [aiProvider, setAiProvider] = useState<AiProvider>("lovable");
+  const [aiOpenaiModel, setAiOpenaiModel] = useState("gpt-4o-mini");
+  const [aiOpenaiBase, setAiOpenaiBase] = useState("https://api.openai.com/v1");
+  const [aiLovableModel, setAiLovableModel] = useState("google/gemini-2.5-flash");
+  const [aiOpenaiKey, setAiOpenaiKey] = useState("");
+  const [aiHasOpenaiKey, setAiHasOpenaiKey] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiNote, setAiNote] = useState("");
+  const [aiErr, setAiErr] = useState("");
+  const fetchAiSettings = useServerFn(getAiSettings);
+  const persistAiSettings = useServerFn(saveAiSettings);
+
+  const applyAiSettings = (s: AiSettingsPublic) => {
+    setAiProvider(s.provider);
+    setAiOpenaiModel(s.openai_model);
+    setAiOpenaiBase(s.openai_base_url);
+    setAiLovableModel(s.lovable_model);
+    setAiHasOpenaiKey(s.has_openai_key);
+  };
+
+  useEffect(() => {
+    void fetchAiSettings().then((r) => r?.settings && applyAiSettings(r.settings)).catch(() => {});
+  }, [fetchAiSettings]);
+
+  const saveAi = async (opts?: { clearKey?: boolean }) => {
+    setAiBusy(true); setAiNote(""); setAiErr("");
+    try {
+      const r = await persistAiSettings({
+        data: {
+          provider: aiProvider,
+          openai_model: aiOpenaiModel,
+          openai_base_url: aiOpenaiBase,
+          lovable_model: aiLovableModel,
+          openai_api_key: opts?.clearKey ? undefined : (aiOpenaiKey.trim() || undefined),
+          clear_openai_key: opts?.clearKey ? true : undefined,
+        },
+      });
+      if (!r?.ok) { setAiErr(r?.error ?? "Gagal menyimpan"); return; }
+      applyAiSettings(r.settings);
+      setAiOpenaiKey("");
+      setAiNote(opts?.clearKey ? "OpenAI key dihapus." : "Konfigurasi AI tersimpan.");
+      setTimeout(() => setAiNote(""), 2800);
+    } catch (e) {
+      setAiErr((e as Error).message);
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
 
   // --- Users state ---
   const [users, setUsers] = useState<AppUserRow[]>([]);
