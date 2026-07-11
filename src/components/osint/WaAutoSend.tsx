@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { MessageCircle, Loader2, Check, X, MessagesSquare, Lock, Send } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getWaSettings, sendWaLookup, getWaReply, getWaPending, type WaSettingsPublic } from "@/lib/wa-gateway.functions";
+import { hasActiveAnalysis } from "@/lib/analisa-ai.functions";
 import { sendTgLookup, isEnigmaFeature, resolveEnigmaLabel } from "@/lib/tg-bridge.functions";
 import { useAuth } from "@/lib/auth";
 import { WaHistory } from "@/components/osint/WaHistory";
