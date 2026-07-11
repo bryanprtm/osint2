@@ -78,7 +78,14 @@ export const saveAiSettings = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const patch: Record<string, unknown> = {
+    const patch: {
+      provider: AiProvider;
+      updated_at: string;
+      openai_model?: string;
+      openai_base_url?: string;
+      lovable_model?: string;
+      openai_api_key?: string | null;
+    } = {
       provider: data.provider,
       updated_at: new Date().toISOString(),
     };
