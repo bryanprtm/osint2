@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { ArrowLeft, Brain } from "lucide-react";
 
 export const Route = createFileRoute("/analisa-ai")({
+  ssr: false,
   head: () => ({
     meta: [
       { title: "Analisa AI Target — Den 404 Anti Eror OSINT" },
