@@ -116,6 +116,8 @@ export function TargetMap({ points, height = 320 }: { points: MapPoint[]; height
     const layer = layerRef.current!;
     layer.clearLayers();
 
+    const estimate = estimateTarget(points);
+
     if (points.length > 0) {
       const latlngs: L.LatLngExpression[] = [];
       for (const p of points) {
@@ -128,6 +130,33 @@ export function TargetMap({ points, height = 320 }: { points: MapPoint[]; height
       if (latlngs.length > 1) {
         L.polyline(latlngs, { color: "#00e5ff", weight: 1.5, opacity: 0.6, dashArray: "4 4" }).addTo(layer);
       }
+
+      // Estimasi lokasi target (weighted centroid + accuracy circle)
+      if (estimate) {
+        L.circle([estimate.lat, estimate.long], {
+          radius: estimate.radius,
+          color: ESTIMATE_COLOR,
+          weight: 1.5,
+          opacity: 0.9,
+          fillColor: ESTIMATE_COLOR,
+          fillOpacity: 0.1,
+          dashArray: "6 6",
+        }).addTo(layer);
+        L.marker([estimate.lat, estimate.long], { icon: estimateIcon(), zIndexOffset: 1000 })
+          .bindPopup(
+            `<div style="font-family:monospace;font-size:11px;min-width:180px">
+              <b style="color:${ESTIMATE_COLOR}">ESTIMASI LOKASI TARGET</b><br/>
+              ${estimate.lat.toFixed(5)}, ${estimate.long.toFixed(5)}<br/>
+              Radius akurasi: ± ${estimate.radius < 1000 ? `${Math.round(estimate.radius)} m` : `${(estimate.radius / 1000).toFixed(2)} km`}<br/>
+              <span style="opacity:0.7">Basis: ${estimate.basis}</span>
+            </div>`,
+            { autoClose: false },
+          )
+          .addTo(layer)
+          .openPopup();
+        latlngs.push([estimate.lat, estimate.long]);
+      }
+
       if (latlngs.length === 1) {
         mapRef.current!.setView(latlngs[0], 13);
       } else {
@@ -137,6 +166,8 @@ export function TargetMap({ points, height = 320 }: { points: MapPoint[]; height
     // Suppress "unused" lint for DEFAULT_ICON in tree-shakers
     void DEFAULT_ICON;
   }, [key, points]);
+
+  const estimate = useMemo(() => estimateTarget(points), [points]);
 
   useEffect(() => {
     return () => {
@@ -153,10 +184,29 @@ export function TargetMap({ points, height = 320 }: { points: MapPoint[]; height
         <span className="ml-auto text-[10px] font-mono text-muted-foreground">{points.length} titik</span>
       </div>
       <div ref={ref} style={{ height }} className="w-full bg-[#04070d]" />
+      {estimate && (
+        <div className="px-3 py-2 border-t border-destructive/30 bg-destructive/5 text-[10px] font-mono flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="uppercase tracking-widest" style={{ color: ESTIMATE_COLOR }}>◉ Estimasi Target</span>
+          <span className="text-foreground">{estimate.lat.toFixed(5)}, {estimate.long.toFixed(5)}</span>
+          <span className="text-muted-foreground">
+            akurasi ± {estimate.radius < 1000 ? `${Math.round(estimate.radius)} m` : `${(estimate.radius / 1000).toFixed(2)} km`}
+          </span>
+          <span className="text-muted-foreground">· basis {estimate.basis}</span>
+          <a
+            href={`https://www.google.com/maps?q=${estimate.lat},${estimate.long}`}
+            target="_blank"
+            rel="noreferrer"
+            className="ml-auto text-cyber hover:underline"
+          >
+            Buka di Google Maps ↗
+          </a>
+        </div>
+      )}
       <div className="flex flex-wrap gap-3 px-3 py-2 border-t border-border text-[10px] font-mono">
         <Legend color={COLOR.cp} label="/cp lokasi" />
         <Legend color={COLOR.convertBTS} label="/convertBTS" />
         <Legend color={COLOR.closestBTS} label="/closestBTS" />
+        <Legend color={ESTIMATE_COLOR} label="Estimasi target" />
       </div>
     </div>
   );
@@ -170,3 +220,4 @@ function Legend({ color, label }: { color: string; label: string }) {
     </span>
   );
 }
+
