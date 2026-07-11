@@ -183,6 +183,9 @@ export type Database = {
       }
       app_settings: {
         Row: {
+          brand_logo_url: string | null
+          brand_subtitle: string
+          brand_title: string
           id: number
           telegram_bot_token: string
           telegram_chat_id: string
@@ -190,6 +193,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          brand_logo_url?: string | null
+          brand_subtitle?: string
+          brand_title?: string
           id?: number
           telegram_bot_token?: string
           telegram_chat_id?: string
@@ -197,6 +203,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          brand_logo_url?: string | null
+          brand_subtitle?: string
+          brand_title?: string
           id?: number
           telegram_bot_token?: string
           telegram_chat_id?: string

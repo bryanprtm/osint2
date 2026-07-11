@@ -3,7 +3,8 @@ import {
   Crosshair, Database, Map, FileSearch, Activity, Settings, LogOut, Shield,
   LayoutGrid, type LucideIcon,
 } from "lucide-react";
-import logo from "@/assets/logo.png";
+import defaultLogo from "@/assets/logo.png";
+import { useAuth } from "@/lib/auth";
 
 const NAV = [
   { icon: Crosshair, label: "Intelijen", active: true },
@@ -36,7 +37,11 @@ export interface SidebarProps {
 }
 
 export function Sidebar({ categories, activeCategory, onSelectCategory }: SidebarProps) {
+  const { settings } = useAuth();
   const showCats = categories && categories.length > 0;
+  const logo = settings.brandLogoUrl?.trim() ? settings.brandLogoUrl : defaultLogo;
+  const title = settings.brandTitle?.trim() || "Den 404 Anti Eror OSINT";
+  const subtitle = settings.brandSubtitle?.trim() || "PROFILER //ID";
 
   const catList = useMemo(() => {
     if (!showCats) return [];
@@ -49,9 +54,9 @@ export function Sidebar({ categories, activeCategory, onSelectCategory }: Sideba
         <div className="w-10 h-10 flex items-center justify-center shrink-0">
           <img src={logo} alt="Logo" className="w-full h-full object-contain drop-shadow-[0_0_8px_rgba(0,229,255,0.35)]" />
         </div>
-        <div className="hidden lg:block">
-          <div className="text-sm font-bold tracking-wider text-foreground">Den 404 Anti Eror OSINT</div>
-          <div className="text-[10px] font-mono text-cyber tracking-widest">PROFILER //ID</div>
+        <div className="hidden lg:block min-w-0">
+          <div className="text-sm font-bold tracking-wider text-foreground truncate">{title}</div>
+          <div className="text-[10px] font-mono text-cyber tracking-widest truncate">{subtitle}</div>
         </div>
       </div>
 

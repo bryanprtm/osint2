@@ -19,6 +19,9 @@ export type AppSettingsRow = {
   telegramBotToken: string;
   telegramChatId: string;
   telegramEnabled: boolean;
+  brandTitle: string;
+  brandSubtitle: string;
+  brandLogoUrl: string;
 };
 
 const moduleInputSchema = z.object({
@@ -149,12 +152,15 @@ export const getAppSettings = createServerFn({ method: "GET" }).handler(async ()
   const { data, error } = await supabaseAdmin
     .from("app_settings").select("*").eq("id", 1).maybeSingle();
   if (error) throw new Error(error.message);
-  const row = data ?? { telegram_bot_token: "", telegram_chat_id: "", telegram_enabled: false };
+  const row: any = data ?? {};
   return {
     settings: {
       telegramBotToken: row.telegram_bot_token ?? "",
       telegramChatId: row.telegram_chat_id ?? "",
       telegramEnabled: row.telegram_enabled ?? false,
+      brandTitle: row.brand_title ?? "Den 404 Anti Eror OSINT",
+      brandSubtitle: row.brand_subtitle ?? "PROFILER //ID",
+      brandLogoUrl: row.brand_logo_url ?? "",
     } satisfies AppSettingsRow,
   };
 });
@@ -165,6 +171,9 @@ export const updateAppSettings = createServerFn({ method: "POST" })
       telegramBotToken: z.string().max(500).optional(),
       telegramChatId: z.string().max(200).optional(),
       telegramEnabled: z.boolean().optional(),
+      brandTitle: z.string().max(120).optional(),
+      brandSubtitle: z.string().max(120).optional(),
+      brandLogoUrl: z.string().max(500_000).optional(),
     }).parse(input),
   )
   .handler(async ({ data }) => {
@@ -172,10 +181,14 @@ export const updateAppSettings = createServerFn({ method: "POST" })
     const patch: {
       telegram_bot_token?: string; telegram_chat_id?: string;
       telegram_enabled?: boolean; updated_at?: string;
+      brand_title?: string; brand_subtitle?: string; brand_logo_url?: string | null;
     } = { updated_at: new Date().toISOString() };
     if (data.telegramBotToken !== undefined) patch.telegram_bot_token = data.telegramBotToken;
     if (data.telegramChatId !== undefined) patch.telegram_chat_id = data.telegramChatId;
     if (data.telegramEnabled !== undefined) patch.telegram_enabled = data.telegramEnabled;
+    if (data.brandTitle !== undefined) patch.brand_title = data.brandTitle;
+    if (data.brandSubtitle !== undefined) patch.brand_subtitle = data.brandSubtitle;
+    if (data.brandLogoUrl !== undefined) patch.brand_logo_url = data.brandLogoUrl || null;
     const { error } = await supabaseAdmin.from("app_settings").update(patch).eq("id", 1);
     if (error) return { ok: false as const, error: error.message };
     return { ok: true as const };
