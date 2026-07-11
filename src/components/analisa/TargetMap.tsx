@@ -150,10 +150,9 @@ export function TargetMap({ points, height = 320 }: { points: MapPoint[]; height
               Radius akurasi: ± ${estimate.radius < 1000 ? `${Math.round(estimate.radius)} m` : `${(estimate.radius / 1000).toFixed(2)} km`}<br/>
               <span style="opacity:0.7">Basis: ${estimate.basis}</span>
             </div>`,
-            { autoClose: false },
+            { autoClose: true, closeOnClick: true, closeButton: true, closeOnEscapeKey: true },
           )
-          .addTo(layer)
-          .openPopup();
+          .addTo(layer);
         latlngs.push([estimate.lat, estimate.long]);
       }
 
