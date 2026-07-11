@@ -72,8 +72,9 @@ export function resolveEnigmaLabel(featureId: string): string | null {
 
 export const ENIGMA_FEATURE_IDS = new Set(Object.keys(ENIGMA_LOOKUP));
 
-export function isEnigmaFeature(featureId: string): boolean {
-  return resolveEnigmaLabel(featureId) !== null;
+export function isEnigmaFeature(_featureId: string): boolean {
+  // Routing Enigma dinonaktifkan — semua modul dikirim ke Bot WhatsApp.
+  return false;
 }
 
 function sign(secret: string, body: string): string {
