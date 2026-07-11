@@ -19,6 +19,9 @@ export type AppSettingsRow = {
   telegramBotToken: string;
   telegramChatId: string;
   telegramEnabled: boolean;
+  brandTitle: string;
+  brandSubtitle: string;
+  brandLogoUrl: string;
 };
 
 const moduleInputSchema = z.object({
