@@ -468,6 +468,76 @@ function AdminPage() {
             </div>
           </section>
 
+          {/* Branding */}
+          <section className="space-y-3">
+            <h2 className="text-xs font-mono uppercase tracking-[0.3em] text-cyber">▸ Branding (Logo & Judul)</h2>
+            <div className="panel-frame corner-brackets rounded-sm p-4 space-y-3">
+              <div className="flex items-center gap-3 pb-2 border-b border-border">
+                <div className="w-14 h-14 flex items-center justify-center bg-panel-elevated rounded-sm border border-border shrink-0 overflow-hidden">
+                  {brandLogo ? (
+                    <img src={brandLogo} alt="Preview" className="w-full h-full object-contain" />
+                  ) : (
+                    <span className="text-[9px] font-mono text-muted-foreground">NO LOGO</span>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-bold tracking-wider truncate">{brandTitle || "—"}</div>
+                  <div className="text-[10px] font-mono text-cyber tracking-widest truncate">{brandSubtitle || "—"}</div>
+                </div>
+              </div>
+
+              <Field label="Judul Web" value={brandTitle} onChange={setBrandTitle} placeholder="Den 404 Anti Eror OSINT" full />
+              <Field label="Subjudul" value={brandSubtitle} onChange={setBrandSubtitle} placeholder="PROFILER //ID" mono full />
+
+              <div className="space-y-1.5">
+                <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Logo (upload gambar, maks 300 KB)</div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) void onLogoFile(f); e.target.value = ""; }}
+                    className="flex-1 text-xs font-mono file:mr-2 file:py-1.5 file:px-3 file:rounded-sm file:border-0 file:bg-cyber file:text-primary-foreground file:font-semibold hover:file:bg-cyber-glow file:cursor-pointer"
+                  />
+                  {brandLogo && (
+                    <button
+                      onClick={() => setBrandLogo("")}
+                      className="px-2.5 py-1.5 rounded-sm border border-destructive/50 text-destructive hover:bg-destructive/10 font-mono uppercase text-[10px] tracking-wider"
+                    >
+                      Hapus
+                    </button>
+                  )}
+                </div>
+                <div className="text-[10px] font-mono text-muted-foreground">Atau tempel URL gambar:</div>
+                <input
+                  value={brandLogo.startsWith("data:") ? "" : brandLogo}
+                  onChange={(e) => setBrandLogo(e.target.value)}
+                  placeholder="https://.../logo.png"
+                  className="w-full bg-input/40 border border-border focus:border-cyber outline-none px-2 py-1.5 rounded-sm text-xs font-mono"
+                />
+                {brandLogo.startsWith("data:") && (
+                  <div className="text-[10px] font-mono text-cyber">● Logo diupload sebagai gambar (data URL).</div>
+                )}
+              </div>
+
+              <button onClick={saveBrand} disabled={brandBusy} className="w-full flex items-center justify-center gap-2 py-2 rounded-sm bg-cyber text-primary-foreground font-semibold tracking-wider text-xs glow-cyber hover:bg-cyber-glow uppercase disabled:opacity-50">
+                <Save className="w-3.5 h-3.5" /> {brandBusy ? "Menyimpan..." : "Simpan Branding"}
+              </button>
+              {brandNote && (
+                <div className="flex items-center gap-2 text-[11px] text-success border border-success/30 bg-success/10 px-2 py-1.5 rounded-sm">
+                  <Check className="w-3.5 h-3.5" /> {brandNote}
+                </div>
+              )}
+              {brandErr && (
+                <div className="flex items-center gap-2 text-[11px] text-destructive border border-destructive/30 bg-destructive/10 px-2 py-1.5 rounded-sm">
+                  ⚠ {brandErr}
+                </div>
+              )}
+              <div className="text-[10px] font-mono text-muted-foreground leading-relaxed">
+                Perubahan langsung tampil di sidebar semua pengguna setelah disimpan (auto-refresh tiap 30 detik atau saat tab difokuskan kembali).
+              </div>
+            </div>
+          </section>
+
           {/* Telegram */}
           <section className="space-y-3">
             <h2 className="text-xs font-mono uppercase tracking-[0.3em] text-cyber">▸ Integrasi Telegram</h2>
