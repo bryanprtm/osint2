@@ -8,6 +8,8 @@ export type MapPoint = {
   long: number;
   label: string;
   kind: "cp" | "convertBTS" | "closestBTS";
+  /** Jarak titik BTS ke target (meter) — jika tersedia dari balasan bot. */
+  distance_m?: number;
 };
 
 // Ganti path default marker Leaflet (assets tidak ter-bundle otomatis di TanStack).
