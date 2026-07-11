@@ -7,26 +7,74 @@ import { createHmac } from "crypto";
  * Harus identik dengan telegram-bridge/features.json.
  */
 export const ENIGMA_FEATURES: Record<string, string> = {
+  // NIK variants
+  nik: "🆔 Cek NIK",
+  nikdetail: "🆔 Cek NIK",
+  nik_detail: "🆔 Cek NIK",
+  cek_nik: "🆔 Cek NIK",
+  ceknik: "🆔 Cek NIK",
+  // KK variants
+  kk: "👨‍👩‍👦 Cek KK",
+  kkdetail: "👨‍👩‍👦 Cek KK",
+  kk_detail: "👨‍👩‍👦 Cek KK",
+  cek_kk: "👨‍👩‍👦 Cek KK",
+  cekkk: "👨‍👩‍👦 Cek KK",
+  // Nama
+  nama: "🔍 Cek Nama",
+  name: "🔍 Cek Nama",
+  cek_nama: "🔍 Cek Nama",
+  ceknama: "🔍 Cek Nama",
+  // Data / Nomor umum
   cek_data: "🔍 Cek Data",
   cek_nomor: "📞 Cek Nomor",
-  nik: "🆔 Cek NIK",
-  nama: "🔍 Cek Nama",
-  kk: "👨‍👩‍👦 Cek KK",
+  ceknomor: "📞 Cek Nomor",
+  // Rek / Ewallet
   validasi_rek: "🔍 Validasi Rek/Ewallet",
+  // NIK Photo
   nik_photo: "📸 NIK Photo",
   nik_photo_v2: "📸 NIK Photo V2",
-  bpjs_keluarga: "🏥 Cek BPJS Keluarga",
+  nik2photo: "📸 NIK Photo",
+  // BPJS
   bpjs: "🏥 Cek BPJS",
+  nkes: "🏥 Cek BPJS",
+  bpjs_keluarga: "🏥 Cek BPJS Keluarga",
   bpjs_tk: "💼 Cek BPJS TK",
+  // Mahasiswa
   mahasiswa: "👨‍🎓 Cek Mahasiswa",
+  mhs: "👨‍🎓 Cek Mahasiswa",
+  // Kendaraan
   kendaraan: "🚗 Cek Kendaraan",
+  nopol: "🚗 Cek Kendaraan",
+  plat: "🚗 Cek Kendaraan",
+  // Lainnya
   face: "👤 Face Recognition",
   sim_reg: "📱 SIM REG",
+  cp: "📱 SIM REG",
+  msisdn: "📱 SIM REG",
+  regnik: "📱 SIM REG",
+  regphone: "📱 SIM REG",
   dpo: "🕵️ DPO",
   perusahaan: "🏢 Perusahaan",
 };
 
-export const ENIGMA_FEATURE_IDS = new Set(Object.keys(ENIGMA_FEATURES));
+// Normalisasi id: lowercase, samakan pemisah agar "Cek-NIK" / "CEK_NIK" / "cekNik" cocok.
+function normalizeFeatureId(id: string): string {
+  return String(id ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+const ENIGMA_LOOKUP: Record<string, string> = Object.fromEntries(
+  Object.entries(ENIGMA_FEATURES).map(([k, v]) => [normalizeFeatureId(k), v]),
+);
+
+export function resolveEnigmaLabel(featureId: string): string | null {
+  return ENIGMA_LOOKUP[normalizeFeatureId(featureId)] ?? null;
+}
+
+export const ENIGMA_FEATURE_IDS = new Set(Object.keys(ENIGMA_LOOKUP));
+
+export function isEnigmaFeature(featureId: string): boolean {
+  return resolveEnigmaLabel(featureId) !== null;
+}
 
 function sign(secret: string, body: string): string {
   return createHmac("sha256", secret).update(body).digest("hex");
@@ -87,7 +135,7 @@ export const sendTgLookup = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data }) => {
-    const label = ENIGMA_FEATURES[data.featureId];
+    const label = resolveEnigmaLabel(data.featureId);
     if (!label) return { ok: false as const, message: `Modul "${data.featureId}" bukan modul bot Enigma.` };
 
     const mtUrl = process.env.TG_BRIDGE_URL ?? "";

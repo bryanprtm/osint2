@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { MessageCircle, Loader2, Check, X, MessagesSquare, Lock, Send } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getWaSettings, sendWaLookup, getWaReply, getWaPending, type WaSettingsPublic } from "@/lib/wa-gateway.functions";
-import { sendTgLookup, ENIGMA_FEATURE_IDS, ENIGMA_FEATURES } from "@/lib/tg-bridge.functions";
+import { sendTgLookup, isEnigmaFeature, resolveEnigmaLabel } from "@/lib/tg-bridge.functions";
 import { useAuth } from "@/lib/auth";
 import { WaHistory } from "@/components/osint/WaHistory";
 
@@ -32,8 +32,8 @@ export function WaAutoSend({ featureId, query }: { featureId: string; query: str
   const fetchReply = useServerFn(getWaReply);
   const fetchPending = useServerFn(getWaPending);
 
-  const isEnigma = ENIGMA_FEATURE_IDS.has(featureId);
-  const enigmaLabel = ENIGMA_FEATURES[featureId] ?? "";
+  const isEnigma = isEnigmaFeature(featureId);
+  const enigmaLabel = resolveEnigmaLabel(featureId) ?? "";
 
   useEffect(() => {
     if (isEnigma) { setSettings(null); return; }
