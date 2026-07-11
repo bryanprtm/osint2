@@ -54,6 +54,12 @@ function AdminPage() {
   const [tgToken, setTgToken] = useState(settings.telegramBotToken);
   const [tgChat, setTgChat] = useState(settings.telegramChatId);
   const [tgEnabled, setTgEnabled] = useState(settings.telegramEnabled);
+  const [brandTitle, setBrandTitle] = useState(settings.brandTitle);
+  const [brandSubtitle, setBrandSubtitle] = useState(settings.brandSubtitle);
+  const [brandLogo, setBrandLogo] = useState(settings.brandLogoUrl);
+  const [brandBusy, setBrandBusy] = useState(false);
+  const [brandNote, setBrandNote] = useState("");
+  const [brandErr, setBrandErr] = useState("");
   const [savedNote, setSavedNote] = useState("");
 
   // --- WhatsApp Gateway state ---
