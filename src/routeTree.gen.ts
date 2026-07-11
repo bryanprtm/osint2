@@ -16,6 +16,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicWaIncomingRouteImport } from './routes/api/public/wa/incoming'
 import { Route as ApiPublicTgIncomingRouteImport } from './routes/api/public/tg/incoming'
+import { Route as ApiPublicHooksAnalisaTickRouteImport } from './routes/api/public/hooks/analisa-tick'
 
 const OsirisRoute = OsirisRouteImport.update({
   id: '/osiris',
@@ -52,6 +53,12 @@ const ApiPublicTgIncomingRoute = ApiPublicTgIncomingRouteImport.update({
   path: '/api/public/tg/incoming',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHooksAnalisaTickRoute =
+  ApiPublicHooksAnalisaTickRouteImport.update({
+    id: '/api/public/hooks/analisa-tick',
+    path: '/api/public/hooks/analisa-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -59,6 +66,7 @@ export interface FileRoutesByFullPath {
   '/analisa-ai': typeof AnalisaAiRoute
   '/login': typeof LoginRoute
   '/osiris': typeof OsirisRoute
+  '/api/public/hooks/analisa-tick': typeof ApiPublicHooksAnalisaTickRoute
   '/api/public/tg/incoming': typeof ApiPublicTgIncomingRoute
   '/api/public/wa/incoming': typeof ApiPublicWaIncomingRoute
 }
@@ -68,6 +76,7 @@ export interface FileRoutesByTo {
   '/analisa-ai': typeof AnalisaAiRoute
   '/login': typeof LoginRoute
   '/osiris': typeof OsirisRoute
+  '/api/public/hooks/analisa-tick': typeof ApiPublicHooksAnalisaTickRoute
   '/api/public/tg/incoming': typeof ApiPublicTgIncomingRoute
   '/api/public/wa/incoming': typeof ApiPublicWaIncomingRoute
 }
@@ -78,6 +87,7 @@ export interface FileRoutesById {
   '/analisa-ai': typeof AnalisaAiRoute
   '/login': typeof LoginRoute
   '/osiris': typeof OsirisRoute
+  '/api/public/hooks/analisa-tick': typeof ApiPublicHooksAnalisaTickRoute
   '/api/public/tg/incoming': typeof ApiPublicTgIncomingRoute
   '/api/public/wa/incoming': typeof ApiPublicWaIncomingRoute
 }
@@ -89,6 +99,7 @@ export interface FileRouteTypes {
     | '/analisa-ai'
     | '/login'
     | '/osiris'
+    | '/api/public/hooks/analisa-tick'
     | '/api/public/tg/incoming'
     | '/api/public/wa/incoming'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +109,7 @@ export interface FileRouteTypes {
     | '/analisa-ai'
     | '/login'
     | '/osiris'
+    | '/api/public/hooks/analisa-tick'
     | '/api/public/tg/incoming'
     | '/api/public/wa/incoming'
   id:
@@ -107,6 +119,7 @@ export interface FileRouteTypes {
     | '/analisa-ai'
     | '/login'
     | '/osiris'
+    | '/api/public/hooks/analisa-tick'
     | '/api/public/tg/incoming'
     | '/api/public/wa/incoming'
   fileRoutesById: FileRoutesById
@@ -117,6 +130,7 @@ export interface RootRouteChildren {
   AnalisaAiRoute: typeof AnalisaAiRoute
   LoginRoute: typeof LoginRoute
   OsirisRoute: typeof OsirisRoute
+  ApiPublicHooksAnalisaTickRoute: typeof ApiPublicHooksAnalisaTickRoute
   ApiPublicTgIncomingRoute: typeof ApiPublicTgIncomingRoute
   ApiPublicWaIncomingRoute: typeof ApiPublicWaIncomingRoute
 }
@@ -172,6 +186,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicTgIncomingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/analisa-tick': {
+      id: '/api/public/hooks/analisa-tick'
+      path: '/api/public/hooks/analisa-tick'
+      fullPath: '/api/public/hooks/analisa-tick'
+      preLoaderRoute: typeof ApiPublicHooksAnalisaTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -181,6 +202,7 @@ const rootRouteChildren: RootRouteChildren = {
   AnalisaAiRoute: AnalisaAiRoute,
   LoginRoute: LoginRoute,
   OsirisRoute: OsirisRoute,
+  ApiPublicHooksAnalisaTickRoute: ApiPublicHooksAnalisaTickRoute,
   ApiPublicTgIncomingRoute: ApiPublicTgIncomingRoute,
   ApiPublicWaIncomingRoute: ApiPublicWaIncomingRoute,
 }
