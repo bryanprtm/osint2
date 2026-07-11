@@ -157,7 +157,14 @@ export function AnalisaAiConsole() {
         const arr = ((s.parsed as any)?.points ?? []) as any[];
         arr.forEach((p, i) => {
           if (typeof p?.lat === "number" && typeof p?.long === "number") {
-            pts.push({ id: `${s.id}-${i}`, lat: p.lat, long: p.long, kind: "closestBTS", label: `Closest #${i + 1} ${p.bts_id ?? ""}` });
+            pts.push({
+              id: `${s.id}-${i}`,
+              lat: p.lat,
+              long: p.long,
+              kind: "closestBTS",
+              label: `Closest #${i + 1} ${p.bts_id ?? ""}${p.distance ? ` · ${p.distance}` : ""}`,
+              distance_m: typeof p.distance_m === "number" ? p.distance_m : undefined,
+            });
           }
         });
       }
