@@ -175,6 +175,18 @@ function AdminPage() {
 
   useEffect(() => { void refreshUsers(); }, [refreshUsers]);
 
+  // --- Login log ---
+  const [loginLog, setLoginLog] = useState<LoginLogRow[]>([]);
+  const [logLoading, setLogLoading] = useState(false);
+  const refreshLoginLog = useCallback(async () => {
+    setLogLoading(true);
+    try {
+      const r = await listLoginLog();
+      setLoginLog(r.rows);
+    } catch { /* ignore */ } finally { setLogLoading(false); }
+  }, []);
+  useEffect(() => { void refreshLoginLog(); }, [refreshLoginLog]);
+
   const resetUserForm = () =>
     setUserForm({ id: null, username: "", password: "", role: "operator", label: "OPERATOR" });
 
