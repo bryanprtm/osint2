@@ -133,6 +133,47 @@ export type Database = {
           },
         ]
       }
+      app_login_log: {
+        Row: {
+          action: string
+          created_at: string
+          detail: string | null
+          id: string
+          ip: string | null
+          user_agent: string | null
+          user_id: string | null
+          username: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          detail?: string | null
+          id?: string
+          ip?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+          username: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          detail?: string | null
+          id?: string
+          ip?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_login_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_modules: {
         Row: {
           category: string
@@ -217,8 +258,10 @@ export type Database = {
       app_users: {
         Row: {
           created_at: string
+          current_session_token: string | null
           id: string
           label: string
+          last_login_at: string | null
           password: string
           role: string
           updated_at: string
@@ -226,8 +269,10 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          current_session_token?: string | null
           id?: string
           label?: string
+          last_login_at?: string | null
           password: string
           role?: string
           updated_at?: string
@@ -235,8 +280,10 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          current_session_token?: string | null
           id?: string
           label?: string
+          last_login_at?: string | null
           password?: string
           role?: string
           updated_at?: string

@@ -7,7 +7,7 @@ import {
   Plus, Trash2, Pencil, Eye, EyeOff, Send, Save, ArrowLeft, RotateCcw, ShieldCheck, Check, X,
   UserPlus, Users as UsersIcon, KeyRound, Loader2, MessageCircle, Copy,
 } from "lucide-react";
-import { listUsers, createUser, updateUser, deleteUser, type AppUserRow } from "@/lib/users.functions";
+import { listUsers, createUser, updateUser, deleteUser, listLoginLog, type AppUserRow, type LoginLogRow } from "@/lib/users.functions";
 import { getWaSettings, saveWaSettings, listWaSendLog, getWaWebhookUrl, DEFAULT_WA_COMMANDS, type WaSettingsPublic, type WaSendLogRow, type WaProvider } from "@/lib/wa-gateway.functions";
 import { getAiSettings, saveAiSettings, type AiSettingsPublic, type AiProvider } from "@/lib/ai-settings.functions";
 import { useServerFn } from "@tanstack/react-start";
@@ -174,6 +174,18 @@ function AdminPage() {
   }, []);
 
   useEffect(() => { void refreshUsers(); }, [refreshUsers]);
+
+  // --- Login log ---
+  const [loginLog, setLoginLog] = useState<LoginLogRow[]>([]);
+  const [logLoading, setLogLoading] = useState(false);
+  const refreshLoginLog = useCallback(async () => {
+    setLogLoading(true);
+    try {
+      const r = await listLoginLog();
+      setLoginLog(r.rows);
+    } catch { /* ignore */ } finally { setLogLoading(false); }
+  }, []);
+  useEffect(() => { void refreshLoginLog(); }, [refreshLoginLog]);
 
   const resetUserForm = () =>
     setUserForm({ id: null, username: "", password: "", role: "operator", label: "OPERATOR" });
@@ -958,6 +970,48 @@ function AdminPage() {
 
               <div className="text-[10px] font-mono text-muted-foreground border-t border-border pt-2 leading-relaxed">
                 Akun login disimpan di Lovable Cloud. Password tidak pernah dikirim ke browser; perubahan hanya bisa lewat panel ini.
+              </div>
+            </div>
+
+            {/* === LOGIN LOG === */}
+            <h2 className="text-xs font-mono uppercase tracking-[0.3em] text-cyber pt-2">▸ Log Login</h2>
+            <div className="panel-frame corner-brackets rounded-sm p-4 space-y-2">
+              <div className="flex items-center gap-2 text-cyber pb-2 border-b border-border">
+                <KeyRound className="w-4 h-4" />
+                <span className="text-xs font-mono uppercase tracking-[0.25em]">Aktivitas ({loginLog.length})</span>
+                <button
+                  onClick={() => void refreshLoginLog()}
+                  className="ml-auto text-[10px] font-mono uppercase tracking-wider text-muted-foreground hover:text-cyber"
+                >
+                  {logLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+              <div className="max-h-72 overflow-auto space-y-1">
+                {loginLog.length === 0 && !logLoading && (
+                  <div className="text-[11px] font-mono text-muted-foreground text-center py-3">Belum ada aktivitas.</div>
+                )}
+                {loginLog.map((l) => {
+                  const color =
+                    l.action === "login" ? "text-success border-success/40"
+                    : l.action === "logout" ? "text-muted-foreground border-border"
+                    : l.action === "idle_timeout" ? "text-warning border-warning/40"
+                    : l.action === "kicked" ? "text-cyber border-cyber/40"
+                    : "text-destructive border-destructive/40";
+                  return (
+                    <div key={l.id} className="flex items-center gap-2 px-2 py-1.5 rounded-sm border border-border/60 bg-input/20">
+                      <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded-sm border ${color}`}>
+                        {l.action}
+                      </span>
+                      <span className="text-xs font-mono truncate">{l.username}</span>
+                      <span className="ml-auto text-[10px] font-mono text-muted-foreground">
+                        {new Date(l.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="text-[10px] font-mono text-muted-foreground border-t border-border pt-2 leading-relaxed">
+                Auto-logout 10 menit tanpa aktivitas · 1 akun hanya untuk 1 perangkat (login baru mengakhiri sesi lama).
               </div>
             </div>
 
