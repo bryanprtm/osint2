@@ -25,10 +25,34 @@ const roleSchema = z.enum(["admin", "operator"]);
 const BCRYPT_ROUNDS = 10;
 const isBcryptHash = (s: string) => /^\$2[aby]\$/.test(s);
 
+export type LoginLogRow = {
+  id: string;
+  user_id: string | null;
+  username: string;
+  action: string;
+  ip: string | null;
+  user_agent: string | null;
+  detail: string | null;
+  created_at: string;
+};
+
+function newToken() {
+  // 32 bytes hex
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 // =============== LOGIN ===============
 export const loginCheck = createServerFn({ method: "POST" })
-  .inputValidator((input: { username: string; password: string }) =>
-    z.object({ username: z.string().min(1).max(100), password: z.string().min(1).max(200) }).parse(input),
+  .inputValidator((input: { username: string; password: string; userAgent?: string }) =>
+    z
+      .object({
+        username: z.string().min(1).max(100),
+        password: z.string().min(1).max(200),
+        userAgent: z.string().max(400).optional(),
+      })
+      .parse(input),
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -40,24 +64,48 @@ export const loginCheck = createServerFn({ method: "POST" })
       .maybeSingle();
 
     if (error) return { ok: false as const, error: "Gagal terhubung ke server" };
-    if (!row) return { ok: false as const, error: "Username atau password salah." };
+    if (!row) {
+      await supabaseAdmin.from("app_login_log").insert({
+        user_id: null, username, action: "failed",
+        user_agent: data.userAgent ?? null, detail: "user not found",
+      });
+      return { ok: false as const, error: "Username atau password salah." };
+    }
 
     const stored = row.password as string;
     let valid = false;
     if (isBcryptHash(stored)) {
       valid = await bcrypt.compare(data.password, stored);
     } else {
-      // Legacy plaintext — verify then upgrade to bcrypt hash transparently.
       valid = stored === data.password;
       if (valid) {
         const hashed = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
         await supabaseAdmin.from("app_users").update({ password: hashed }).eq("id", row.id);
       }
     }
-    if (!valid) return { ok: false as const, error: "Username atau password salah." };
+    if (!valid) {
+      await supabaseAdmin.from("app_login_log").insert({
+        user_id: row.id, username, action: "failed",
+        user_agent: data.userAgent ?? null, detail: "bad password",
+      });
+      return { ok: false as const, error: "Username atau password salah." };
+    }
+
+    // Single-device: rotate session token, kicking any previous device.
+    const token = newToken();
+    await supabaseAdmin
+      .from("app_users")
+      .update({ current_session_token: token, last_login_at: new Date().toISOString() })
+      .eq("id", row.id);
+
+    await supabaseAdmin.from("app_login_log").insert({
+      user_id: row.id, username, action: "login",
+      user_agent: data.userAgent ?? null,
+    });
 
     return {
       ok: true as const,
+      token,
       user: {
         id: row.id as string,
         username: row.username as string,
@@ -66,6 +114,67 @@ export const loginCheck = createServerFn({ method: "POST" })
       },
     };
   });
+
+// =============== VALIDATE SESSION ===============
+export const validateSession = createServerFn({ method: "POST" })
+  .inputValidator((input: { userId: string; token: string }) =>
+    z.object({ userId: z.string().uuid(), token: z.string().min(8).max(128) }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row } = await supabaseAdmin
+      .from("app_users")
+      .select("current_session_token")
+      .eq("id", data.userId)
+      .maybeSingle();
+    if (!row) return { ok: false as const, reason: "not_found" as const };
+    if (row.current_session_token !== data.token) return { ok: false as const, reason: "kicked" as const };
+    return { ok: true as const };
+  });
+
+// =============== LOGOUT ===============
+export const logoutSession = createServerFn({ method: "POST" })
+  .inputValidator(
+    (input: { userId: string; token: string; reason?: "manual" | "idle_timeout" }) =>
+      z
+        .object({
+          userId: z.string().uuid(),
+          token: z.string().min(8).max(128),
+          reason: z.enum(["manual", "idle_timeout"]).optional(),
+        })
+        .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row } = await supabaseAdmin
+      .from("app_users")
+      .select("id, username, current_session_token")
+      .eq("id", data.userId)
+      .maybeSingle();
+    if (!row) return { ok: true as const };
+    // Only clear the token if it still matches this device
+    if (row.current_session_token === data.token) {
+      await supabaseAdmin.from("app_users").update({ current_session_token: null }).eq("id", row.id);
+    }
+    await supabaseAdmin.from("app_login_log").insert({
+      user_id: row.id,
+      username: row.username as string,
+      action: data.reason === "idle_timeout" ? "idle_timeout" : "logout",
+    });
+    return { ok: true as const };
+  });
+
+// =============== LOGIN LOG (admin) ===============
+export const listLoginLog = createServerFn({ method: "GET" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data, error } = await supabaseAdmin
+    .from("app_login_log")
+    .select("id, user_id, username, action, ip, user_agent, detail, created_at")
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw new Error(error.message);
+  return { rows: (data ?? []) as LoginLogRow[] };
+});
 
 // =============== LIST ===============
 export const listUsers = createServerFn({ method: "GET" }).handler(async () => {
