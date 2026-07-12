@@ -7,7 +7,7 @@ import {
   Plus, Trash2, Pencil, Eye, EyeOff, Send, Save, ArrowLeft, RotateCcw, ShieldCheck, Check, X,
   UserPlus, Users as UsersIcon, KeyRound, Loader2, MessageCircle, Copy,
 } from "lucide-react";
-import { listUsers, createUser, updateUser, deleteUser, type AppUserRow } from "@/lib/users.functions";
+import { listUsers, createUser, updateUser, deleteUser, listLoginLog, type AppUserRow, type LoginLogRow } from "@/lib/users.functions";
 import { getWaSettings, saveWaSettings, listWaSendLog, getWaWebhookUrl, DEFAULT_WA_COMMANDS, type WaSettingsPublic, type WaSendLogRow, type WaProvider } from "@/lib/wa-gateway.functions";
 import { getAiSettings, saveAiSettings, type AiSettingsPublic, type AiProvider } from "@/lib/ai-settings.functions";
 import { useServerFn } from "@tanstack/react-start";
