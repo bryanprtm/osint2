@@ -126,10 +126,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const tokenRef = useRef<string | null>(null);
+  const lastActivityRef = useRef<number>(Date.now());
+
+  const doLogout = useCallback(async (reason: "manual" | "idle_timeout" | "kicked") => {
+    const u = user;
+    const t = tokenRef.current;
+    setUser(null);
+    tokenRef.current = null;
+    try { localStorage.removeItem(AUTH_KEY); } catch { /* ignore */ }
+    if (u?.id && t && (reason === "manual" || reason === "idle_timeout")) {
+      try { await logoutSession({ data: { userId: u.id, token: t, reason } }); } catch { /* ignore */ }
+    }
+    if (reason === "idle_timeout") {
+      try { alert("Sesi berakhir otomatis setelah 10 menit tidak aktif."); } catch { /* ignore */ }
+    } else if (reason === "kicked") {
+      try { alert("Akun ini login di perangkat lain. Sesi ini diakhiri."); } catch { /* ignore */ }
+    }
+  }, [user]);
+
   useEffect(() => {
     try {
       const a = localStorage.getItem(AUTH_KEY);
-      if (a) setUser(JSON.parse(a));
+      if (a) {
+        const parsed = JSON.parse(a);
+        if (parsed?.user && parsed?.token) {
+          setUser(parsed.user);
+          tokenRef.current = parsed.token;
+        }
+      }
     } catch {
       /* ignore */
     }
@@ -150,22 +175,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchModules, fetchSettings]);
 
+  // Idle auto-logout (10 min) + single-device session validation (every 20s)
+  useEffect(() => {
+    if (!user) return;
+    const IDLE_MS = 10 * 60 * 1000;
+    const bump = () => { lastActivityRef.current = Date.now(); };
+    const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll", "click"];
+    events.forEach((e) => window.addEventListener(e, bump, { passive: true }));
+
+    const idleTimer = window.setInterval(() => {
+      if (Date.now() - lastActivityRef.current >= IDLE_MS) {
+        void doLogout("idle_timeout");
+      }
+    }, 15_000);
+
+    const sessionTimer = window.setInterval(async () => {
+      const t = tokenRef.current;
+      if (!user?.id || !t) return;
+      try {
+        const r = await validateSession({ data: { userId: user.id, token: t } });
+        if (!r.ok) void doLogout("kicked");
+      } catch {
+        /* transient */
+      }
+    }, 20_000);
+
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, bump));
+      window.clearInterval(idleTimer);
+      window.clearInterval(sessionTimer);
+    };
+  }, [user, doLogout]);
+
   const value: AuthCtx = {
     ready,
     user,
     modules,
     settings,
     login: async (u, p) => {
-      const r = await loginCheck({ data: { username: u, password: p } });
+      const ua = typeof navigator !== "undefined" ? navigator.userAgent : undefined;
+      const r = await loginCheck({ data: { username: u, password: p, userAgent: ua } });
       if (!r.ok) return { ok: false, error: r.error };
       setUser(r.user);
-      localStorage.setItem(AUTH_KEY, JSON.stringify(r.user));
+      tokenRef.current = r.token;
+      lastActivityRef.current = Date.now();
+      localStorage.setItem(AUTH_KEY, JSON.stringify({ user: r.user, token: r.token }));
       return { ok: true };
     },
-    logout: () => {
-      setUser(null);
-      localStorage.removeItem(AUTH_KEY);
-    },
+    logout: () => { void doLogout("manual"); },
     addModule: async (m) => {
       if (modules.some((x) => x.id === m.id)) return;
       const sort_order = modules.length;
